@@ -85,7 +85,7 @@ init python:
                 if self.discord_rpc.rpc and self.discord_rpc.connected:
                     # Try a minimal update
                     self.discord_rpc.rpc.update(
-                        state="Проверка соединения",
+                        state="Connection check",
                         details=config.name or 'RenPy Game'
                     )
                     self.last_successful_update = time.time()
@@ -170,15 +170,15 @@ init python:
             error_str = str(error).lower()
             
             if "discord not found" in error_str or "no discord client" in error_str:
-                return "Discord не запущен. Запустите Discord и попробуйте снова."
+                return "Discord is not running. Start Discord and try again."
             elif "invalid client id" in error_str:
-                return "Неверный Client ID. Проверьте настройки Discord RPC."
+                return "Invalid Client ID. Check Discord RPC settings."
             elif "connection refused" in error_str:
-                return "Discord отклонил соединение. Проверьте настройки Discord."
+                return "Discord refused connection. Check Discord settings."
             elif "timeout" in error_str:
-                return "Таймаут подключения к Discord."
+                return "Discord connection timeout."
             else:
-                return f"Ошибка подключения: {error}"
+                return f"Connection error: {error}"
                 
         @staticmethod
         def handle_update_error(error):
@@ -186,13 +186,13 @@ init python:
             error_str = str(error).lower()
             
             if "invalid payload" in error_str:
-                return "Неверные данные для обновления статуса."
+                return "Invalid data for status update."
             elif "rate limit" in error_str:
-                return "Слишком частые обновления. Подождите немного."
+                return "Too frequent updates. Please wait."
             elif "connection lost" in error_str:
-                return "Соединение с Discord потеряно."
+                return "Connection to Discord lost."
             else:
-                return f"Ошибка обновления: {error}"
+                return f"Update error: {error}"
 
     # Enhanced Discord RPC with reliability features
     class ReliableDiscordRPC:

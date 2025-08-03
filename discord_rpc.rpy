@@ -15,13 +15,13 @@ init -1 python:
 
     class DiscordRPCStatus:
         """Enum-like class for Discord RPC connection status"""
-        DISABLED = "Отключен"
-        CONNECTING = "Подключение"
-        CONNECTED = "Подключен"
-        ERROR = "Ошибка"
-        DISCONNECTED = "Отключен"
-        RECONNECTING = "Переподключение"
-        TIMEOUT = "Таймаут"
+        DISABLED = "Disabled"
+        CONNECTING = "Connecting"
+        CONNECTED = "Connected"
+        ERROR = "Error"
+        DISCONNECTED = "Disconnected"
+        RECONNECTING = "Reconnecting"
+        TIMEOUT = "Timeout"
 
         @staticmethod
         def get_color(status):
@@ -388,7 +388,7 @@ init python:
         """Called when a label starts"""
         if discord_rpc.enabled and discord_rpc.connected:
             discord_rpc.update_presence(
-                state=f"В сцене: {label_name}",
+                state=f"In scene: {label_name}",
                 details=config.name or 'RenPy Game'
             )
     
@@ -396,7 +396,7 @@ init python:
         """Called when entering menu"""
         if discord_rpc.enabled and discord_rpc.connected:
             discord_rpc.update_presence(
-                state="В меню",
+                state="In menu",
                 details=config.name or 'RenPy Game'
             )
 
