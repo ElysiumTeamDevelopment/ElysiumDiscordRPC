@@ -28,14 +28,14 @@ init python:
             if not (discord_rpc.enabled and discord_rpc.connected):
                 return
                 
-            state_text = "Playing"
+            state_text = "Играет"
             details_text = config.name or 'RenPy Game'
-
+            
             if chapter_name:
-                state_text = f"Chapter: {chapter_name}"
-
+                state_text = f"Глава: {chapter_name}"
+            
             if character_name:
-                details_text = f"Talking to {character_name}"
+                details_text = f"Разговор с {character_name}"
             
             discord_rpc.update_presence(
                 state=state_text,
@@ -57,16 +57,16 @@ init python:
                 return
                 
             if character_name and scene_name:
-                state_text = f"Scene: {scene_name}"
-                details_text = f"Dialogue with {character_name}"
+                state_text = f"Сцена: {scene_name}"
+                details_text = f"Диалог с {character_name}"
             elif character_name:
-                state_text = "Reading dialogue"
-                details_text = f"Talking to {character_name}"
+                state_text = "Читает диалог"
+                details_text = f"Разговор с {character_name}"
             elif scene_name:
-                state_text = f"Scene: {scene_name}"
-                details_text = "Reading dialogue"
+                state_text = f"Сцена: {scene_name}"
+                details_text = "Читает диалог"
             else:
-                state_text = "Reading dialogue"
+                state_text = "Читает диалог"
                 details_text = config.name or 'RenPy Game'
             
             discord_rpc.update_presence(
@@ -77,16 +77,16 @@ init python:
             )
         
         @staticmethod
-        def set_in_menu(menu_name="Menu"):
+        def set_in_menu(menu_name="Меню"):
             """
             Set Discord status for menu navigation
-
+            
             Args:
                 menu_name (str): Name of the current menu
             """
             if discord_rpc.enabled and discord_rpc.connected:
                 discord_rpc.update_presence(
-                    state=f"In menu: {menu_name}",
+                    state=f"В меню: {menu_name}",
                     details=config.name or 'RenPy Game',
                     large_image="game_icon",
                     large_text=config.name or 'RenPy Game'
@@ -105,7 +105,7 @@ init python:
             """Set Discord status to loading"""
             if discord_rpc.enabled and discord_rpc.connected:
                 discord_rpc.update_presence(
-                    state="Loading...",
+                    state="Загрузка...",
                     details=config.name or 'RenPy Game',
                     large_image="game_icon",
                     large_text=config.name or 'RenPy Game'
@@ -184,7 +184,7 @@ init python:
         """Wrapper for setting dialogue status"""
         drpc.set_reading_dialogue(character, scene)
     
-    def discord_set_menu(menu_name="Menu"):
+    def discord_set_menu(menu_name="Меню"):
         """Wrapper for setting menu status"""
         drpc.set_in_menu(menu_name)
     
@@ -225,7 +225,7 @@ init python:
             elif label_name == "start":
                 import time
                 self.game_start_time = int(time.time())
-                drpc.set_with_timestamp("Game start", start_time=self.game_start_time)
+                drpc.set_with_timestamp("Начало игры", start_time=self.game_start_time)
             elif label_name.startswith("chapter_"):
                 chapter_name = label_name.replace("chapter_", "").replace("_", " ").title()
                 drpc.set_in_game(chapter_name)
@@ -252,24 +252,21 @@ init python:
     discord_auto_tracker = DiscordRPCAutoTracker()
 
 # RenPy callback integration
-init python:
-    def discord_rpc_say_callback(what, **kwargs):
-        """Callback for say statements to track character dialogue"""
-        # This callback is for text filtering, we need a different approach
-        return what
+# Note: Automatic character tracking is disabled by default to avoid conflicts
+# To enable, uncomment the code below and test thoroughly with your game
 
-    # Use a different callback approach
-    original_say = renpy.say
-
-    def wrapped_say(who, what, *args, **kwargs):
-        """Wrapped say function to track character dialogue"""
-        # Update Discord RPC if character is speaking
-        if who and hasattr(who, 'name'):
-            discord_auto_tracker.on_character_speak(who.name)
-        elif who:
-            discord_auto_tracker.on_character_speak(str(who))
-
-        return original_say(who, what, *args, **kwargs)
-
-    # Replace the say function (commented out to avoid conflicts)
-    # renpy.say = wrapped_say
+# init python:
+#     original_say = renpy.say
+#
+#     def wrapped_say(who, what, *args, **kwargs):
+#         """Wrapped say function to track character dialogue"""
+#         # Update Discord RPC if character is speaking
+#         if who and hasattr(who, 'name'):
+#             discord_auto_tracker.on_character_speak(who.name)
+#         elif who:
+#             discord_auto_tracker.on_character_speak(str(who))
+#
+#         return original_say(who, what, *args, **kwargs)
+#
+#     # Replace the say function
+#     renpy.say = wrapped_say

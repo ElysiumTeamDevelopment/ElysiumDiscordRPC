@@ -27,58 +27,58 @@ screen discord_rpc_settings():
             spacing 20
             xfill True
             
-            label "Discord RPC Settings" xalign 0.5
-
+            label "Настройки Discord RPC" xalign 0.5
+            
             hbox:
                 spacing 10
                 text "Discord RPC:"
-                textbutton "Enabled" action SetVariable("persistent.discord_rpc_enabled", True) selected persistent.discord_rpc_enabled
-                textbutton "Disabled" action SetVariable("persistent.discord_rpc_enabled", False) selected not persistent.discord_rpc_enabled
+                textbutton "Включен" action SetVariable("persistent.discord_rpc_enabled", True) selected persistent.discord_rpc_enabled
+                textbutton "Отключен" action SetVariable("persistent.discord_rpc_enabled", False) selected not persistent.discord_rpc_enabled
             
             if persistent.discord_rpc_enabled:
                 vbox:
                     spacing 10
                     
                     $ status_info = discord_rpc.get_status_info()
-                    text "Connection status: {color=[status_info['color']]}[status_info['status']]{/color}"
+                    text "Статус подключения: {color=[status_info['color']]}[status_info['status']]{/color}"
 
                     if status_info['last_error']:
-                        text "Last error: [status_info['last_error']]" size 12
-
+                        text "Последняя ошибка: [status_info['last_error']]" size 12
+                    
                     hbox:
                         spacing 10
-                        textbutton "Connect" action Function(discord_rpc.enable) sensitive not discord_rpc.connected
-                        textbutton "Disconnect" action Function(discord_rpc.disable) sensitive discord_rpc.connected
-                        textbutton "Reconnect" action Function(discord_rpc_reconnect)
-
-                    text "Discord Application Client ID:"
+                        textbutton "Подключить" action Function(discord_rpc.enable) sensitive not discord_rpc.connected
+                        textbutton "Отключить" action Function(discord_rpc.disable) sensitive discord_rpc.connected
+                        textbutton "Переподключить" action Function(discord_rpc_reconnect)
+                    
+                    text "Client ID приложения Discord:"
                     input:
                         value VariableInputValue("persistent.discord_rpc_client_id")
                         length 20
                         allow "0123456789"
                         xsize 300
                     
-                    text "To get Client ID create application at https://discord.com/developers/applications" size 14
+                    text "Для получения Client ID создайте приложение на https://discord.com/developers/applications" size 14
 
                     null height 10
 
                     hbox:
                         spacing 10
-                        text "Startup synchronization:"
-                        textbutton "Enabled" action SetVariable("persistent.discord_rpc_sync_startup", True) selected persistent.discord_rpc_sync_startup
-                        textbutton "Disabled" action SetVariable("persistent.discord_rpc_sync_startup", False) selected not persistent.discord_rpc_sync_startup
+                        text "Синхронизация при запуске:"
+                        textbutton "Включена" action SetVariable("persistent.discord_rpc_sync_startup", True) selected persistent.discord_rpc_sync_startup
+                        textbutton "Отключена" action SetVariable("persistent.discord_rpc_sync_startup", False) selected not persistent.discord_rpc_sync_startup
 
-                    text "Enabling slows down game startup but guarantees Discord connection" size 12
+                    text "Включение замедляет запуск игры, но гарантирует подключение к Discord" size 12
             
             hbox:
                 spacing 20
                 xalign 0.5
                 
-                textbutton "Apply" action [
+                textbutton "Применить" action [
                     Function(apply_discord_rpc_settings),
                     Return()
                 ]
-                textbutton "Cancel" action Return()
+                textbutton "Отмена" action Return()
 
 # Functions for settings management
 init python:
@@ -111,15 +111,11 @@ init python:
     def get_discord_rpc_status_text():
         """Get formatted Discord RPC status text"""
         if not discord_rpc:
-            return "Not initialized"
+            return "Не инициализирован"
         return discord_rpc.get_status()
 
-# Add Discord RPC settings to preferences screen
-init python:
-    def add_discord_rpc_to_preferences():
-        """Add Discord RPC option to preferences menu"""
-        # This function can be called to add Discord RPC settings to existing preferences
-        pass
+# Note: To add Discord RPC to your preferences screen, use:
+# textbutton "Discord RPC" action ShowMenu("discord_rpc_settings")
 
 # Quick toggle functions for use in game
 init python:
@@ -128,11 +124,11 @@ init python:
         if persistent.discord_rpc_enabled:
             persistent.discord_rpc_enabled = False
             discord_rpc.disable()
-            renpy.notify("Discord RPC disabled")
+            renpy.notify("Discord RPC отключен")
         else:
             persistent.discord_rpc_enabled = True
             discord_rpc.enable()
-            renpy.notify("Discord RPC enabled")
+            renpy.notify("Discord RPC включен")
     
     def update_discord_rpc_game_state(state_text, details_text=None):
         """
@@ -150,32 +146,34 @@ init python:
             discord_rpc.update_presence(**update_data)
 
 # Automatic status updates based on game events
-init python:
-    # Store original functions to wrap them
-    original_call_in_new_context = renpy.call_in_new_context
-    original_jump = renpy.jump
-    
-    def wrapped_call_in_new_context(label, *args, **kwargs):
-        """Wrapped call function to track label changes"""
-        result = original_call_in_new_context(label, *args, **kwargs)
-        
-        # Update Discord RPC with current label
-        if discord_rpc.enabled and discord_rpc.connected:
-            discord_rpc_on_label_start(label)
-            
-        return result
-    
-    def wrapped_jump(label, *args, **kwargs):
-        """Wrapped jump function to track label changes"""
-        # Update Discord RPC before jumping
-        if discord_rpc.enabled and discord_rpc.connected:
-            discord_rpc_on_label_start(label)
-            
-        return original_jump(label, *args, **kwargs)
-    
-    # Replace functions (commented out to avoid conflicts)
-    # renpy.call_in_new_context = wrapped_call_in_new_context
-    # renpy.jump = wrapped_jump
+# Note: Automatic label tracking is disabled by default to avoid conflicts
+# To enable, uncomment the code below and test thoroughly with your game
+
+# init python:
+#     original_call_in_new_context = renpy.call_in_new_context
+#     original_jump = renpy.jump
+#     
+#     def wrapped_call_in_new_context(label, *args, **kwargs):
+#         """Wrapped call function to track label changes"""
+#         result = original_call_in_new_context(label, *args, **kwargs)
+#         
+#         # Update Discord RPC with current label
+#         if discord_rpc.enabled and discord_rpc.connected:
+#             discord_rpc_on_label_start(label)
+#             
+#         return result
+#     
+#     def wrapped_jump(label, *args, **kwargs):
+#         """Wrapped jump function to track label changes"""
+#         # Update Discord RPC before jumping
+#         if discord_rpc.enabled and discord_rpc.connected:
+#             discord_rpc_on_label_start(label)
+#             
+#         return original_jump(label, *args, **kwargs)
+#     
+#     # Replace functions
+#     renpy.call_in_new_context = wrapped_call_in_new_context
+#     renpy.jump = wrapped_jump
 
 # Screen action for opening Discord RPC settings
 init python:

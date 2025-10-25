@@ -46,42 +46,42 @@ define discord_config.small_images = {
 
 # Main menu presence
 define discord_config.main_menu_presence = {
-    "state": "In main menu",
+    "state": "В главном меню",
     "details": None,  # Will use game_name
     "large_image": "game_icon",
     "large_text": None,  # Will use game_name
     "small_image": "menu",
-    "small_text": "Main menu"
+    "small_text": "Главное меню"
 }
 
 # In-game default presence
 define discord_config.gameplay_presence = {
-    "state": "Playing",
+    "state": "Играет",
     "details": None,  # Will use game_name
     "large_image": "gameplay",
     "large_text": None,  # Will use game_name
     "small_image": "playing",
-    "small_text": "In game"
+    "small_text": "В игре"
 }
 
 # Paused presence
 define discord_config.paused_presence = {
-    "state": "Paused",
+    "state": "На паузе",
     "details": None,  # Will use game_name
     "large_image": "gameplay",
     "large_text": None,  # Will use game_name
     "small_image": "paused",
-    "small_text": "Paused"
+    "small_text": "Пауза"
 }
 
 # Reading dialogue presence
 define discord_config.dialogue_presence = {
-    "state": "Reading dialogue",
+    "state": "Читает диалог",
     "details": None,  # Will use game_name
     "large_image": "gameplay",
     "large_text": None,  # Will use game_name
     "small_image": "reading",
-    "small_text": "Dialogue"
+    "small_text": "Диалог"
 }
 
 # =============================================================================
@@ -128,19 +128,19 @@ define discord_config.auto_tracking = {
 
 # Label patterns for automatic status updates
 define discord_config.label_patterns = {
-    "chapter_": "Chapter {chapter}",      # chapter_1 -> "Chapter 1"
-    "scene_": "Scene {scene}",          # scene_park -> "Scene park"
-    "menu_": "Menu {menu}",             # menu_settings -> "Menu settings"
-    "ending_": "Ending {ending}",     # ending_good -> "Ending good"
+    "chapter_": "Глава {chapter}",      # chapter_1 -> "Глава 1"
+    "scene_": "Сцена {scene}",          # scene_park -> "Сцена park"
+    "menu_": "Меню {menu}",             # menu_settings -> "Меню settings"
+    "ending_": "Концовка {ending}",     # ending_good -> "Концовка good"
 }
 
 # Character name mappings for better display
 define discord_config.character_names = {
-    "e": "Eileen",                       # Character object 'e' -> "Eileen"
-    "narrator": "Narrator",           # narrator -> "Narrator"
+    "e": "Эйлин",                       # Character object 'e' -> "Эйлин"
+    "narrator": "Рассказчик",           # narrator -> "Рассказчик"
     # Add your characters here:
-    # "alice": "Alice",
-    # "bob": "Bob",
+    # "alice": "Алиса",
+    # "bob": "Боб",
 }
 
 # =============================================================================
@@ -150,11 +150,11 @@ define discord_config.character_names = {
 # Discord Rich Presence buttons (max 2)
 define discord_config.buttons = [
     {
-        "label": "Play Game",
+        "label": "Играть в игру",
         "url": "https://example.com/play"
     },
     {
-        "label": "Developer Site",
+        "label": "Сайт разработчика", 
         "url": "https://example.com"
     }
 ]
@@ -183,7 +183,7 @@ define discord_config.timestamps = {
 
 # Fallback settings
 define discord_config.fallbacks = {
-    "default_state": "Playing game",
+    "default_state": "Играет в игру",
     "default_details": "Visual Novel",
     "default_large_image": "game_icon",
     "default_small_image": "playing",
