@@ -173,35 +173,92 @@ init python:
 # Convenient wrapper functions for use in RenPy scripts
 init python:
     def discord_set_main_menu():
-        """Wrapper for setting main menu status"""
+        """
+        Set Discord status to main menu
+        
+        Example:
+            $ discord_set_main_menu()
+        """
         drpc.set_main_menu()
     
     def discord_set_in_game(chapter=None, character=None):
-        """Wrapper for setting in-game status"""
+        """
+        Set Discord status for in-game state
+        
+        Args:
+            chapter (str): Current chapter/scene name
+            character (str): Current character being talked to
+            
+        Example:
+            $ discord_set_in_game("Глава 1", "Эйлин")
+        """
         drpc.set_in_game(chapter, character)
     
     def discord_set_dialogue(character=None, scene=None):
-        """Wrapper for setting dialogue status"""
+        """
+        Set Discord status for dialogue reading
+        
+        Args:
+            character (str): Character currently speaking
+            scene (str): Current scene name
+            
+        Example:
+            $ discord_set_dialogue("Эйлин", "Комната")
+        """
         drpc.set_reading_dialogue(character, scene)
     
     def discord_set_menu(menu_name="Меню"):
-        """Wrapper for setting menu status"""
+        """
+        Set Discord status for menu navigation
+        
+        Args:
+            menu_name (str): Name of the current menu
+            
+        Example:
+            $ discord_set_menu("Настройки")
+        """
         drpc.set_in_menu(menu_name)
     
     def discord_set_paused():
-        """Wrapper for setting paused status"""
+        """
+        Set Discord status to paused
+        
+        Example:
+            $ discord_set_paused()
+        """
         drpc.set_paused()
     
     def discord_set_loading():
-        """Wrapper for setting loading status"""
+        """
+        Set Discord status to loading
+        
+        Example:
+            $ discord_set_loading()
+        """
         drpc.set_loading()
     
     def discord_set_custom(state, details=None, **kwargs):
-        """Wrapper for setting custom status"""
+        """
+        Set custom Discord status
+        
+        Args:
+            state (str): Custom state text
+            details (str): Custom details text
+            **kwargs: Additional Discord RPC parameters
+            
+        Example:
+            $ discord_set_custom("Исследует мир", "Глава 2")
+            $ discord_set_custom("В бою", large_image="battle_icon")
+        """
         drpc.set_custom(state, details, **kwargs)
     
     def discord_clear():
-        """Wrapper for clearing status"""
+        """
+        Clear Discord Rich Presence
+        
+        Example:
+            $ discord_clear()
+        """
         drpc.clear()
 
 # Automatic status tracking based on RenPy events

@@ -13,6 +13,13 @@ init -1 python:
     except ImportError:
         PYPRESENCE_AVAILABLE = False
         print("Warning: pypresence not available. Discord RPC will be disabled.")
+    
+    # Discord RPC Constants
+    DISCORD_DEFAULT_CLIENT_ID = "1234567890123456789"
+    DISCORD_QUEUE_MAX_SIZE = 100
+    DISCORD_THREAD_JOIN_TIMEOUT = 2.0
+    DISCORD_MONITOR_INTERVAL = 5.0
+    DISCORD_RETRY_RESET_TIME = 300  # 5 minutes in seconds
 
     class DiscordRPCStatus:
         """Enum-like class for Discord RPC connection status"""
@@ -52,7 +59,7 @@ init -1 python:
                 client_id (str): Discord application client ID
             """
             # Initialize with default client_id, will be updated later
-            self.client_id = client_id or "1234567890123456789"
+            self.client_id = client_id or DISCORD_DEFAULT_CLIENT_ID
             self.rpc = None
             self.status = DiscordRPCStatus.DISABLED
             self.enabled = False
@@ -75,8 +82,8 @@ init -1 python:
 
             self.last_error = None
             self.connection_start_time = None
-            self.status_callbacks = set()  # Use set for O(1) add/remove
-            self.pending_updates = Queue(maxsize=100)  # Thread-safe queue
+            self.status_callbacks = []  # List of callbacks (RenPy compatible)
+            self.pending_updates = Queue(maxsize=DISCORD_QUEUE_MAX_SIZE)  # Thread-safe queue
             self._shutdown_flag = False
             
         def _load_config(self):
@@ -99,15 +106,36 @@ init -1 python:
                 print(f"Warning: Failed to load Discord RPC config: {e}")
             
         def is_enabled(self):
-            """Check if Discord RPC is enabled in preferences"""
+            """
+            Check if Discord RPC is enabled in preferences
+            
+            Returns:
+                bool: True if enabled, False otherwise
+            """
             return getattr(persistent, 'discord_rpc_enabled', True)
             
         def get_status(self):
-            """Get current connection status"""
+            """
+            Get current connection status
+            
+            Returns:
+                str: Current status (DISABLED, CONNECTING, CONNECTED, ERROR, etc.)
+            """
             return self.status
 
         def get_status_info(self):
-            """Get detailed status information"""
+            """
+            Get detailed status information
+            
+            Returns:
+                dict: Dictionary with keys:
+                    - status (str): Current status text
+                    - enabled (bool): Whether RPC is enabled
+                    - connected (bool): Whether connected to Discord
+                    - retry_count (int): Number of retry attempts
+                    - last_error (str): Last error message or None
+                    - color (str): Hex color code for status display
+            """
             return {
                 'status': self.status,
                 'enabled': self.enabled,
@@ -118,12 +146,23 @@ init -1 python:
             }
 
         def add_status_callback(self, callback):
-            """Add callback for status changes"""
+            """
+            Add callback for status changes
+            
+            Args:
+                callback (callable): Function to call on status change.
+                    Signature: callback(old_status, new_status)
+            """
             if callback not in self.status_callbacks:
                 self.status_callbacks.append(callback)
 
         def remove_status_callback(self, callback):
-            """Remove status callback"""
+            """
+            Remove status callback
+            
+            Args:
+                callback (callable): Previously registered callback to remove
+            """
             if callback in self.status_callbacks:
                 self.status_callbacks.remove(callback)
 
@@ -148,7 +187,12 @@ init -1 python:
             self._notify_status_change(old_status, new_status)
             
         def enable(self):
-            """Enable Discord RPC"""
+            """
+            Enable Discord RPC and attempt connection
+            
+            Returns:
+                bool: True if connection started, False if pypresence unavailable
+            """
             if not PYPRESENCE_AVAILABLE:
                 self.status = DiscordRPCStatus.ERROR
                 return False
@@ -158,7 +202,11 @@ init -1 python:
             return self.connect()
             
         def disable(self):
-            """Disable Discord RPC"""
+            """
+            Disable Discord RPC and disconnect
+            
+            This will close the connection and prevent automatic reconnection.
+            """
             self.enabled = False
             persistent.discord_rpc_enabled = False
             self.disconnect()
@@ -347,7 +395,7 @@ init -1 python:
                 thread = self.connection_thread
                 
             if thread and thread.is_alive():
-                thread.join(timeout=2.0)
+                thread.join(timeout=DISCORD_THREAD_JOIN_TIMEOUT)
                 if thread.is_alive():
                     print("Warning: Connection thread did not terminate cleanly")
 
@@ -356,7 +404,7 @@ init -1 python:
             
         def _process_pending_updates(self):
             """Process any pending updates from startup"""
-            if self.pending_updates is None:
+            if self.pending_updates is None or self.rpc is None:
                 return
                 
             while not self.pending_updates.empty():
@@ -370,22 +418,30 @@ init -1 python:
         def update_presence(self, **kwargs):
             """
             Update Discord Rich Presence
-
+            
             Args:
-                state (str): Current state text
-                details (str): Details text
-                large_image (str): Large image key
-                large_text (str): Large image tooltip
-                small_image (str): Small image key
-                small_text (str): Small image tooltip
-                start (int): Start timestamp
-                end (int): End timestamp
-                party_id (str): Party ID
-                party_size (list): [current_size, max_size]
-                join (str): Join secret
-                spectate (str): Spectate secret
-                match (str): Match secret
-                buttons (list): List of button dicts with 'label' and 'url'
+                state (str): Current state text (max 128 chars recommended)
+                details (str): Details text (max 128 chars recommended)
+                large_image (str): Large image key from Discord assets
+                large_text (str): Large image hover text
+                small_image (str): Small image key from Discord assets
+                small_text (str): Small image hover text
+                start (int): Unix timestamp for elapsed time display
+                end (int): Unix timestamp for remaining time display
+                party_id (str): Unique party identifier
+                party_size (list): [current_size, max_size] for party display
+                buttons (list): Max 2 buttons with 'label' and 'url' keys
+                
+            Returns:
+                bool: True if update successful or queued, False otherwise
+                
+            Example:
+                discord_rpc.update_presence(
+                    state="В главном меню",
+                    details="Моя игра",
+                    large_image="game_icon",
+                    large_text="Название игры"
+                )
             """
             if not self.enabled:
                 return False
@@ -409,7 +465,18 @@ init -1 python:
             return self._update_presence_internal(kwargs)
             
         def _update_presence_internal(self, kwargs):
-            """Internal presence update method"""
+            """
+            Internal presence update method
+            
+            Args:
+                kwargs (dict): Presence data to send to Discord
+                
+            Returns:
+                bool: True if update successful, False otherwise
+            """
+            if kwargs is None:
+                return False
+                
             try:
                 with self._lock:
                     rpc = self.rpc
@@ -421,6 +488,7 @@ init -1 python:
                 return False
             except Exception as e:
                 print(f"Discord RPC update failed: {e}")
+                print(f"  Status: {self.status}, Connected: {self.connected}")
                 
                 with self._lock:
                     self.connected = False

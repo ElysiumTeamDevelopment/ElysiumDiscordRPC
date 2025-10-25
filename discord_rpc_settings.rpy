@@ -20,55 +20,67 @@ screen discord_rpc_settings():
     frame:
         xalign 0.5
         yalign 0.5
-        xsize 600
-        ysize 400
+        xsize 700
+        ymaximum 650
         
         vbox:
-            spacing 20
+            spacing 10
             xfill True
             
             label "Настройки Discord RPC" xalign 0.5
             
-            hbox:
-                spacing 10
-                text "Discord RPC:"
-                textbutton "Включен" action SetVariable("persistent.discord_rpc_enabled", True) selected persistent.discord_rpc_enabled
-                textbutton "Отключен" action SetVariable("persistent.discord_rpc_enabled", False) selected not persistent.discord_rpc_enabled
-            
-            if persistent.discord_rpc_enabled:
+            viewport:
+                scrollbars "vertical"
+                mousewheel True
+                ymaximum 520
+                
                 vbox:
-                    spacing 10
-                    
-                    $ status_info = discord_rpc.get_status_info()
-                    text "Статус подключения: {color=[status_info['color']]}[status_info['status']]{/color}"
-
-                    if status_info['last_error']:
-                        text "Последняя ошибка: [status_info['last_error']]" size 12
+                    spacing 15
+                    xfill True
+                    xsize 650
                     
                     hbox:
                         spacing 10
-                        textbutton "Подключить" action Function(discord_rpc.enable) sensitive not discord_rpc.connected
-                        textbutton "Отключить" action Function(discord_rpc.disable) sensitive discord_rpc.connected
-                        textbutton "Переподключить" action Function(discord_rpc_reconnect)
+                        text "Discord RPC:"
+                        textbutton "Включен" action SetVariable("persistent.discord_rpc_enabled", True) selected persistent.discord_rpc_enabled
+                        textbutton "Отключен" action SetVariable("persistent.discord_rpc_enabled", False) selected not persistent.discord_rpc_enabled
                     
-                    text "Client ID приложения Discord:"
-                    input:
-                        value VariableInputValue("persistent.discord_rpc_client_id")
-                        length 20
-                        allow "0123456789"
-                        xsize 300
-                    
-                    text "Для получения Client ID создайте приложение на https://discord.com/developers/applications" size 14
+                    if persistent.discord_rpc_enabled:
+                        vbox:
+                            spacing 10
+                            
+                            $ status_info = discord_rpc.get_status_info()
+                            text "Статус подключения: {color=[status_info['color']]}[status_info['status']]{/color}"
 
-                    null height 10
+                            if status_info['last_error']:
+                                text "Последняя ошибка: [status_info['last_error']]" size 12
+                            
+                            hbox:
+                                spacing 10
+                                textbutton "Подключить" action Function(discord_rpc.enable) sensitive not discord_rpc.connected
+                                textbutton "Отключить" action Function(discord_rpc.disable) sensitive discord_rpc.connected
+                                textbutton "Переподключить" action Function(discord_rpc_reconnect)
+                            
+                            text "Client ID приложения Discord:" size 14
+                            input:
+                                value VariableInputValue("persistent.discord_rpc_client_id")
+                                length 20
+                                allow "0123456789"
+                                xsize 400
+                            
+                            text "Для получения Client ID создайте приложение на\nhttps://discord.com/developers/applications" size 12
 
-                    hbox:
-                        spacing 10
-                        text "Синхронизация при запуске:"
-                        textbutton "Включена" action SetVariable("persistent.discord_rpc_sync_startup", True) selected persistent.discord_rpc_sync_startup
-                        textbutton "Отключена" action SetVariable("persistent.discord_rpc_sync_startup", False) selected not persistent.discord_rpc_sync_startup
+                            null height 10
 
-                    text "Включение замедляет запуск игры, но гарантирует подключение к Discord" size 12
+                            text "Синхронизация при запуске:" size 14
+                            hbox:
+                                spacing 10
+                                textbutton "Включена" action SetVariable("persistent.discord_rpc_sync_startup", True) selected persistent.discord_rpc_sync_startup
+                                textbutton "Отключена" action SetVariable("persistent.discord_rpc_sync_startup", False) selected not persistent.discord_rpc_sync_startup
+
+                            text "Включение замедляет запуск игры,\nно гарантирует подключение к Discord" size 11
+            
+            null height 10
             
             hbox:
                 spacing 20
@@ -76,9 +88,9 @@ screen discord_rpc_settings():
                 
                 textbutton "Применить" action [
                     Function(apply_discord_rpc_settings),
-                    Return()
-                ]
-                textbutton "Отмена" action Return()
+                    Hide("discord_rpc_settings")
+                ] xsize 150
+                textbutton "Отмена" action Hide("discord_rpc_settings") xsize 150
 
 # Functions for settings management
 init python:
@@ -176,12 +188,5 @@ init python:
 #     renpy.jump = wrapped_jump
 
 # Screen action for opening Discord RPC settings
-init python:
-    class ShowDiscordRPCSettings(Action):
-        """Action to show Discord RPC settings screen"""
-        
-        def __call__(self):
-            renpy.call_screen("discord_rpc_settings")
-        
-        def get_selected(self):
-            return False
+# Note: Use Show("discord_rpc_settings") instead of this class
+# Example: textbutton "Discord RPC" action Show("discord_rpc_settings")
