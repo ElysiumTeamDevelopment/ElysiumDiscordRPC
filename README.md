@@ -47,6 +47,8 @@ your_renpy_project/
 │   ├── discord_rpc_config.rpy      # Configuration
 │   ├── discord_rpc.rpy             # Main module
 │   ├── discord_rpc_api.rpy         # API functions
+│   ├── libs/
+│   │   └── 01-discord-rpc.rpy      # CDS definitions (Optional, for cleaner syntax)
 │   ├── discord_rpc_settings.rpy    # Built-in UI (optional)
 │   ├── discord_rpc_reliability.rpy # Additional reliability (optional)
 │   └── python-packages/
@@ -81,28 +83,31 @@ define discord_config.game_name = "My Awesome Game"
 
 ```python
 label start:
-    # Set game start status
-    $ discord_set_custom("Adventure begins", "Prologue")
+    # Set game start status using CDS (Cleaner syntax)
+    discord custom "Adventure begins" "Prologue"
+    
+    # OR using Python function
+    # $ discord_set_custom("Adventure begins", "Prologue")
 
     "Welcome to the game!"
 
     # Character dialogue status
-    $ discord_set_dialogue("Eileen", "Room")
+    discord dialogue "Eileen" "Room"
 
     e "Hello! How are you?"
 
     # Gameplay status
-    $ discord_set_in_game("Chapter 1", "Eileen")
+    discord in_game "Chapter 1" "Eileen"
 
     menu:
         "What to do?"
 
         "Continue":
-            $ discord_set_custom("Continuing story", "Chapter 1")
+            discord custom "Continuing story" "Chapter 1"
             jump chapter1
 
         "Settings":
-            $ discord_set_menu("Settings")
+            discord menu "Settings"
             jump settings
 ```
 
@@ -153,6 +158,7 @@ For ready-made "out of the box" solution:
 - **[Installation](docs/en/installation.md)** - detailed installation guide
 - **[Configuration](docs/en/configuration.md)** - configuring `discord_rpc_config.rpy`
 - **[API Reference](docs/en/api-reference.md)** - reference for all functions
+- **[CDS Reference](docs/en/cds-reference.md)** - **NEW!** cleaner syntax guide
 - **[UI Integration](docs/en/ui-integration.md)** - user interface integration
 - **[Examples](docs/en/examples.md)** - ready-to-use code examples
 - **[Troubleshooting](docs/en/troubleshooting.md)** - problem solving
