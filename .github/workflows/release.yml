@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on tags starting with 'v' (e.g., v1.0.0)
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Required for creating releases
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for proper git log
+        
+      - name: Create release directory
+        run: |
+          mkdir -p release
+          mkdir -p release/libs
+          mkdir -p release/docs
+        
+      - name: Copy files to release directory
+        run: |
+          # Core files
+          cp discord_rpc_ren.py release/
+          cp discord_rpc_api_ren.py release/
+          cp discord_rpc_reliability_ren.py release/
+          cp discord_rpc_config.rpy release/
+          cp discord_rpc_settings.rpy release/
+          
+          # Libraries
+          cp libs/01-discord-rpc_ren.py release/libs/
+          
+          # Documentation
+          cp -r docs/* release/docs/
+          cp LICENSE release/
+          cp README.md release/
+          
+      - name: Create zip archive
+        run: |
+          cd release
+          zip -r ../ElysiumDiscordRPC-${{ github.ref_name }}.zip .
+          cd ..
+          
+      - name: Get previous tag
+        id: prev_tag
+        run: |
+          PREV_TAG=$(git tag --sort=-version:refname | sed -n '2p')
+          if [ -z "$PREV_TAG" ]; then
+            echo "prev_tag=" >> $GITHUB_OUTPUT
+          else
+            echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Generate changelog
+        run: |
+          if [ -n "${{ steps.prev_tag.outputs.prev_tag }}" ]; then
+            echo "## 🔄 Changes since ${{ steps.prev_tag.outputs.prev_tag }}" > changelog.md
+            echo "" >> changelog.md
+            git log --pretty=format:"- %s (%h)" ${{ steps.prev_tag.outputs.prev_tag }}..${{ github.ref_name }} | head -20 >> changelog.md
+          else
+            echo "## 🎉 First release!" > changelog.md
+            echo "" >> changelog.md
+            echo "### All commits in this release:" >> changelog.md
+            git log --pretty=format:"- %s (%h)" | head -20 >> changelog.md
+          fi
+          echo "" >> changelog.md
+          echo "" >> changelog.md
+          echo "### 📦 Included files:" >> changelog.md
+          echo "- \`discord_rpc_ren.py\` - main Discord RPC module" >> changelog.md
+          echo "- \`discord_rpc_api_ren.py\` - Discord RPC API implementation" >> changelog.md
+          echo "- \`discord_rpc_reliability_ren.py\` - reliability and reconnection logic" >> changelog.md
+          echo "- \`discord_rpc_config.rpy\` - configuration file" >> changelog.md
+          echo "- \`discord_rpc_settings.rpy\` - settings screen" >> changelog.md
+          echo "- \`libs/01-discord-rpc_ren.py\` - pypresence library" >> changelog.md
+          echo "- \`docs/\` - documentation (EN/RU)" >> changelog.md
+          echo "- \`LICENSE\` - license file" >> changelog.md
+          echo "- \`README.md\` - documentation" >> changelog.md
+          echo "" >> changelog.md
+          echo "### 🚀 Installation:" >> changelog.md
+          echo "1. Download the \`ElysiumDiscordRPC-${{ github.ref_name }}.zip\` archive" >> changelog.md
+          echo "2. Extract to the \`game/\` folder of your Ren'Py project" >> changelog.md
+          echo "3. Configure your Discord Application ID in \`discord_rpc_config.rpy\`" >> changelog.md
+          echo "4. Restart the game to apply changes" >> changelog.md
+          echo "" >> changelog.md
+          echo "### 📖 Documentation:" >> changelog.md
+          echo "- [English](docs/en/)" >> changelog.md
+          echo "- [Русский](docs/ru/)" >> changelog.md
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "Elysium Discord RPC ${{ github.ref_name }}"
+          body_path: changelog.md
+          files: ElysiumDiscordRPC-${{ github.ref_name }}.zip
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
