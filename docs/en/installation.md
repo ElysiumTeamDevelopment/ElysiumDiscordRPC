@@ -110,7 +110,7 @@ your_renpy_project/
 
 **Via Git:**
 ```bash
-git clone https://github.com/username/ElysiumDiscordRPC.git
+git clone https://github.com/ElysiumDevelopment/ElysiumDiscordRPC.git
 cd ElysiumDiscordRPC
 ```
 
@@ -230,5 +230,5 @@ After successful installation:
 
 If you encounter problems:
 1. Check [Troubleshooting](troubleshooting.md)
-2. Create an [Issue on GitHub](https://github.com/username/ElysiumDiscordRPC/issues)
+2. Create an [Issue on GitHub](https://github.com/ElysiumDevelopment/ElysiumDiscordRPC/issues)
 3. Include RenPy logs and problem description

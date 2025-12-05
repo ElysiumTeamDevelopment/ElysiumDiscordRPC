@@ -1,9 +1,9 @@
 # ElysiumDiscordRPC
 
-**Advanced Discord Rich Presence module for RenPy games**
+**Advanced Discord Rich Presence module for Ren'Py games**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![RenPy](https://img.shields.io/badge/RenPy-8.0%2B-blue.svg)](https://www.renpy.org/)
+[![License](https://img.shields.io/badge/License-Custom-blue.svg)](#license)
+[![RenPy](https://img.shields.io/badge/RenPy-8.1%2B-blue.svg)](https://www.renpy.org/)
 [![Python](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/)
 [![pypresence](https://img.shields.io/badge/using-pypresence-00bb88.svg?style=flat&logo=discord&logoWidth=20)](https://github.com/qwertyquerty/pypresence)
 
@@ -11,206 +11,117 @@
 
 ## 🚀 Features
 
-- ✅ **Smart synchronization** - fast startup + reliable connection
-- ✅ **Modular architecture** - use only needed components
-- ✅ **Centralized configuration** - all settings in one file
-- ✅ **Rich API** - 15+ functions for any scenarios
-- ✅ **Automatic tracking** - labels, characters, menus
-- ✅ **Reliability system** - reconnection and error handling
-- ✅ **Flexible settings** - built-in UI or custom integration
-- ✅ **Detailed documentation** - examples and guides
+- ✅ **Modular architecture** — use only what you need (3-6 files)
+- ✅ **Rich API** — 15+ functions for any scenario
+- ✅ **CDS syntax** — clean commands without Python
+- ✅ **Centralized configuration** — all settings in one file
+- ✅ **Built-in settings UI** — optional ready-made screen
+- ✅ **Reliability system** — auto-reconnection and error handling
+- ✅ **Detailed documentation** — complete Wiki with examples
 
 ## 📦 Quick Installation
 
-### 1. Download the module
-```bash
-git clone https://github.com/username/ElysiumDiscordRPC.git
-```
+### 1. Download
+Download the [latest release](https://github.com/ElysiumTeamDevelopment/ElysiumDiscordRPC/releases).
 
-### 2. Copy files to your RenPy project
-
-**Minimal installation (Core):**
+### 2. Copy files to your project
 ```
 your_renpy_project/
-├── game/
-│   ├── discord_rpc_config.rpy      # Configuration
-│   ├── discord_rpc.rpy             # Main module
-│   ├── discord_rpc_api.rpy         # API functions
-│   └── python-packages/
-│       └── pypresence/             # Discord RPC library
-```
-
-**Full installation:**
-```
-your_renpy_project/
-├── game/
-│   ├── discord_rpc_config.rpy      # Configuration
-│   ├── discord_rpc.rpy             # Main module
-│   ├── discord_rpc_api.rpy         # API functions
-│   ├── libs/
-│   │   └── 01-discord-rpc.rpy      # CDS definitions (Optional, for cleaner syntax)
-│   ├── discord_rpc_settings.rpy    # Built-in UI (optional)
-│   ├── discord_rpc_reliability.rpy # Additional reliability (optional)
-│   └── python-packages/
-│       └── pypresence/             # Discord RPC library
+└── game/
+    ├── discord_rpc_ren.py          # Main module (required)
+    ├── discord_rpc_api_ren.py      # API functions (required)
+    ├── discord_rpc_config.rpy      # Configuration (required)
+    ├── discord_rpc_settings.rpy    # Settings UI (optional)
+    ├── discord_rpc_reliability_ren.py  # Reliability (optional)
+    └── python-packages/
+        └── pypresence/             # Discord RPC library
 ```
 
 ### 3. Install pypresence
 ```bash
-# In your project directory
-uv pip install pypresence --target game/python-packages
+pip install pypresence --target game/python-packages
 ```
 
-### 4. Configure settings
-
+### 4. Configure
 Edit `discord_rpc_config.rpy`:
 ```python
-# Required: your Discord Application ID
 define discord_config.application_id = "YOUR_DISCORD_APP_ID"
-
-# Recommended: game name
-define discord_config.game_name = "My Awesome Game"
+define discord_config.game_name = "Your Game Name"
 ```
-
-**Get Application ID:**
-1. Go to https://discord.com/developers/applications
-2. Create a new application
-3. Copy the Application ID
 
 ## 🎮 Quick Start
 
-### Basic usage in RenPy scripts:
-
-```python
+```renpy
 label start:
-    # Set game start status using CDS (Cleaner syntax)
-    discord custom "Adventure begins" "Prologue"
+    # CDS syntax (clean)
+    discord custom "Starting adventure" "Prologue"
     
-    # OR using Python function
-    # $ discord_set_custom("Adventure begins", "Prologue")
-
     "Welcome to the game!"
-
-    # Character dialogue status
-    discord dialogue "Eileen" "Room"
-
-    e "Hello! How are you?"
-
-    # Gameplay status
-    discord in_game "Chapter 1" "Eileen"
-
+    
+    discord dialogue "Alice" "Park"
+    alice "Hello! Nice to meet you!"
+    
+    discord in_game "Chapter 1" "Alice"
+    
     menu:
         "What to do?"
-
         "Continue":
             discord custom "Continuing story" "Chapter 1"
             jump chapter1
-
-        "Settings":
-            discord menu "Settings"
-            jump settings
 ```
 
-### Connection management:
-
+Or use Python functions:
 ```python
-# Enable Discord RPC
-$ discord_rpc.enable()
-
-# Disable Discord RPC
-$ discord_rpc.disable()
-
-# Reconnect
-$ discord_rpc.disconnect()
-$ discord_rpc.connect()
-
-# Check status
-$ status = discord_rpc.get_status()
+$ discord_set_custom("Starting adventure", "Prologue")
+$ discord_set_dialogue("Alice", "Park")
+$ discord_set_in_game("Chapter 1", "Alice")
 ```
 
 ## 📁 Module Structure
 
 | File | Purpose | Required |
 |------|---------|----------|
-| `discord_rpc_config.rpy` | Central configuration | ✅ **Required** |
-| `discord_rpc.rpy` | Main module logic | ✅ **Required** |
-| `discord_rpc_api.rpy` | API functions for developers | ✅ **Required** |
-| `discord_rpc_settings.rpy` | Built-in settings UI | ⚪ Optional |
-| `discord_rpc_reliability.rpy` | Additional reliability | ⚪ Optional |
-| `discord_rpc_test.rpy` | Testing and debugging | ⚪ Development only |
-
-## 🎯 Usage Options
-
-### Core Package (minimal)
-For developers with custom interface:
-- `discord_rpc_config.rpy`
-- `discord_rpc.rpy`
-- `discord_rpc_api.rpy`
-
-### Full Package (all features)
-For ready-made "out of the box" solution:
-- Core Package +
-- `discord_rpc_settings.rpy` (ready UI)
-- `discord_rpc_reliability.rpy` (enterprise-grade reliability)
+| `discord_rpc_ren.py` | Main module | ✅ Yes |
+| `discord_rpc_api_ren.py` | API functions | ✅ Yes |
+| `discord_rpc_config.rpy` | Configuration | ✅ Yes |
+| `discord_rpc_settings.rpy` | Settings UI | ❌ Optional |
+| `discord_rpc_reliability_ren.py` | Reliability | ❌ Optional |
+| `libs/01-discord-rpc_ren.py` | CDS commands | ❌ Optional |
 
 ## 📚 Documentation
 
-- **[Installation](docs/en/installation.md)** - detailed installation guide
-- **[Configuration](docs/en/configuration.md)** - configuring `discord_rpc_config.rpy`
-- **[API Reference](docs/en/api-reference.md)** - reference for all functions
-- **[CDS Reference](docs/en/cds-reference.md)** - **NEW!** cleaner syntax guide
-- **[UI Integration](docs/en/ui-integration.md)** - user interface integration
-- **[Examples](docs/en/examples.md)** - ready-to-use code examples
-- **[Troubleshooting](docs/en/troubleshooting.md)** - problem solving
+**Full documentation available in the [Wiki](https://github.com/ElysiumTeamDevelopment/ElysiumDiscordRPC/wiki)**
+
+- [Quick Start](https://github.com/ElysiumTeamDevelopment/ElysiumDiscordRPC/wiki/Quick-Start)
+- [Installation](https://github.com/ElysiumTeamDevelopment/ElysiumDiscordRPC/wiki/Installation)
+- [Basic Configuration](https://github.com/ElysiumTeamDevelopment/ElysiumDiscordRPC/wiki/Basic-Configuration)
+- [API Functions](https://github.com/ElysiumTeamDevelopment/ElysiumDiscordRPC/wiki/API-Functions)
+- [CDS Commands](https://github.com/ElysiumTeamDevelopment/ElysiumDiscordRPC/wiki/CDS-Commands)
+- [Common Errors](https://github.com/ElysiumTeamDevelopment/ElysiumDiscordRPC/wiki/Common-Errors)
+- [FAQ](https://github.com/ElysiumTeamDevelopment/ElysiumDiscordRPC/wiki/FAQ)
 
 ## ⚙️ Requirements
 
-- **RenPy:** 8.0+
+- **Ren'Py:** 8.1+
 - **Python:** 3.9+
-- **Discord:** Installed Discord client
-- **Internet:** For initial Discord App setup
-
-## 🔧 Features
-
-### Smart Synchronization
-- **Default:** Startup connection with 5-second timeout
-- **On issues:** Automatic switch to asynchronous mode
-- **Configurable:** Can be disabled for instant startup
-
-### Modular Architecture
-- **Minimum:** 3 files for basic functionality
-- **Maximum:** 6 files for all features
-- **Flexibility:** Use only needed components
-
-### Centralized Configuration
-- **One file:** All settings in `discord_rpc_config.rpy`
-- **Validation:** Automatic correctness checking
-- **Templates:** Ready-made status templates
-
-## 🤝 Comparison with Alternatives
-
-| Feature | ElysiumDiscordRPC | Lezalith/RenPy-Discord-Presence |
-|---------|-------------------|--------------------------------|
-| **Code size** | Modular (3-6 files) | Monolithic (2 files) |
-| **API functions** | 15+ functions | 4 functions |
-| **Configuration** | Centralized | Built-in |
-| **Settings UI** | Optional | None |
-| **Reliability** | Advanced | Basic |
-| **Rollback support** | Basic | Excellent |
-| **Documentation** | Detailed | Good |
+- **Discord:** Installed and running
+- **OS:** Windows, macOS, Linux
 
 ## 📄 License
 
-MIT License - use freely in commercial and non-commercial projects.
+**Free to use, but credit is required.**
+
+When using this module in your project, you must include the following attribution in your game's credits, README, or about section:
+
+> **Uses Elysium Discord RPC by Elysium Development**
 
 ## 🆘 Support
 
-- **Issues:** [GitHub Issues](https://github.com/username/ElysiumDiscordRPC/issues)
-- **Documentation:** [docs/en/](docs/en/)
-- **Examples:** [docs/en/examples.md](docs/en/examples.md)
+- **Wiki:** [Documentation](https://github.com/ElysiumTeamDevelopment/ElysiumDiscordRPC/wiki)
+- **Issues:** [GitHub Issues](https://github.com/ElysiumTeamDevelopment/ElysiumDiscordRPC/issues)
 
 ## 🙏 Acknowledgments
 
-- [pypresence](https://github.com/qwertyquerty/pypresence) - Discord RPC library
-- [Lezalith](https://github.com/Lezalith/RenPy_Discord_Presence) - inspiration and reference
-- RenPy community for support and testing
+- [pypresence](https://github.com/qwertyquerty/pypresence) — Discord RPC library
+- [Lezalith](https://github.com/Lezalith/RenPy_Discord_Presence) — inspiration
+- Ren'Py community for support and testing

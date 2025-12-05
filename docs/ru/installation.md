@@ -110,7 +110,7 @@ your_renpy_project/
 
 **Через Git:**
 ```bash
-git clone https://github.com/username/ElysiumDiscordRPC.git
+git clone https://github.com/ElysiumDevelopment/ElysiumDiscordRPC.git
 cd ElysiumDiscordRPC
 ```
 
@@ -230,5 +230,5 @@ $ discord_set_custom("Тестирование", "Проверка устано�
 
 Если возникли проблемы:
 1. Проверьте [Troubleshooting](troubleshooting.md)
-2. Создайте [Issue на GitHub](https://github.com/username/ElysiumDiscordRPC/issues)
+2. Создайте [Issue на GitHub](https://github.com/ElysiumDevelopment/ElysiumDiscordRPC/issues)
 3. Приложите логи RenPy и описание проблемы
