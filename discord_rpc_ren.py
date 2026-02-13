@@ -398,13 +398,19 @@ class DiscordRPC:
                 print(f"Discord RPC connection failed after {self.max_retries} attempts")
                 
     def disconnect(self):
-        """Disconnect from Discord RPC"""
+        """Disconnect from Discord RPC and clear presence"""
         self._shutdown_flag = True
         
         with self._lock:
             self.connected = False
         
         if self.rpc:
+            try:
+                # Clear presence before closing connection
+                self.rpc.clear()
+            except Exception as e:
+                print(f"Warning: Error clearing RPC presence: {e}")
+            
             try:
                 self.rpc.close()
             except Exception as e:
