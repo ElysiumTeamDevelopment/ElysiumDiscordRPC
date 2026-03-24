@@ -289,14 +289,8 @@ class DiscordRPC:
                 return
                 
             try:
-                # Close existing connection safely
-                if self.rpc:
-                    try:
-                        self.rpc.close()
-                    except Exception as e:
-                        print(f"Warning: Error closing old RPC connection: {e}")
-                    finally:
-                        self.rpc = None
+                # Close existing connection safely without event loop conflicts
+                self._safe_close_rpc()
 
                 self.rpc = Presence(self.client_id)
                 self.rpc.connect()
@@ -352,14 +346,8 @@ class DiscordRPC:
             return
             
         try:
-            # Close existing connection safely
-            if self.rpc:
-                try:
-                    self.rpc.close()
-                except Exception as e:
-                    print(f"Warning: Error closing old RPC connection: {e}")
-                finally:
-                    self.rpc = None
+            # Close existing connection safely without event loop conflicts
+            self._safe_close_rpc()
                     
             self.rpc = Presence(self.client_id)
             self.rpc.connect()
@@ -404,19 +392,8 @@ class DiscordRPC:
         with self._lock:
             self.connected = False
         
-        if self.rpc:
-            try:
-                # Clear presence before closing connection
-                self.rpc.clear()
-            except Exception as e:
-                print(f"Warning: Error clearing RPC presence: {e}")
-            
-            try:
-                self.rpc.close()
-            except Exception as e:
-                print(f"Warning: Error closing RPC connection: {e}")
-            finally:
-                self.rpc = None
+        # Safe cleanup without event loop conflicts
+        self._safe_close_rpc()
             
         # Wait for connection thread to finish (with timeout)
         with self._lock:
@@ -429,6 +406,31 @@ class DiscordRPC:
 
         self._set_status(DiscordRPCStatus.DISCONNECTED)
         self._shutdown_flag = False
+    
+    def _safe_close_rpc(self):
+        """
+        Safely close RPC connection without event loop conflicts
+        Handles asyncio event loop issues when closing from different threads
+        """
+        if not self.rpc:
+            return
+            
+        try:
+            # Try to clear presence first (may fail if event loop issues)
+            try:
+                self.rpc.clear()
+            except:
+                pass  # Ignore clear errors, focus on closing
+            
+            # Close the connection
+            try:
+                self.rpc.close()
+            except:
+                pass  # Ignore close errors
+                
+        finally:
+            # Always set rpc to None to prevent reuse
+            self.rpc = None
         
     def _process_pending_updates(self):
         """Process any pending updates from startup"""
@@ -533,9 +535,17 @@ class DiscordRPC:
     def clear_presence(self):
         """Clear Discord Rich Presence"""
         try:
-            if self.rpc and self.connected:
-                self.rpc.clear()
-                return True
+            with self._lock:
+                rpc = self.rpc
+                is_connected = self.connected
+                
+            if rpc and is_connected:
+                try:
+                    rpc.clear()
+                    return True
+                except:
+                    # Ignore event loop errors on clear
+                    return False
         except Exception as e:
             print(f"Discord RPC clear failed: {e}")
             
