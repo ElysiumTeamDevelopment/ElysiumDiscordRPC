@@ -105,6 +105,12 @@ define discord_config.queue = {
     "max_reliability_queue": 100,       # Max queued updates in reliability manager
 }
 
+# Rate limiting settings
+define discord_config.rate_limiting = {
+    "enabled": True,                    # Prevent excessive Discord IPC updates
+    "min_interval": 10.0,               # Minimum seconds between updates
+}
+
 # Logging settings
 define discord_config.logging = {
     "log_connections": True,            # Log connection events
@@ -207,7 +213,9 @@ init python:
             value = discord_config
             
             for k in keys:
-                if hasattr(value, k):
+                if isinstance(value, dict) and k in value:
+                    value = value[k]
+                elif hasattr(value, k):
                     value = getattr(value, k)
                 else:
                     return default

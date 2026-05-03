@@ -14,6 +14,7 @@ config: Any = None
 discord_config: Any = None
 get_discord_config: Callable = None
 get_presence_template: Callable = None
+resolve_image_asset: Callable = None
 init_reliable_discord_rpc: Callable = None
 PYPRESENCE_AVAILABLE: bool = True
 
@@ -88,6 +89,7 @@ class DiscordRPC:
         self.connection_thread = None
         self.last_update = {}
         self.retry_count = 0
+        self._retry_timer = None
         
         # Thread safety
         self._lock = threading.RLock()
@@ -100,29 +102,71 @@ class DiscordRPC:
         self.startup_timeout = 5.0
         self.connection_timeout = 30.0
         self.max_pending_updates = 10
+        self.rate_limit_enabled = True
+        self.rate_limit_interval = 10.0
+        self._last_presence_update_time = 0.0
 
         self.last_error = None
         self.connection_start_time = None
         self.status_callbacks = []  # List of callbacks (RenPy compatible)
         self.pending_updates = Queue(maxsize=DISCORD_QUEUE_MAX_SIZE)  # Thread-safe queue
         self._shutdown_flag = False
+
+    def _is_placeholder_client_id(self, client_id):
+        """Return True for empty/default placeholder client IDs."""
+        return not client_id or client_id == DISCORD_DEFAULT_CLIENT_ID
+
+    def _is_valid_client_id(self, client_id):
+        """Validate Discord application ID format."""
+        if self._is_placeholder_client_id(client_id):
+            return False
+        return str(client_id).isdigit() and 17 <= len(str(client_id)) <= 19
+
+    def _resize_pending_queue(self, max_size):
+        """Resize pending update queue while preserving queued updates."""
+        try:
+            max_size = max(1, int(max_size))
+        except Exception:
+            max_size = DISCORD_QUEUE_MAX_SIZE
+
+        with self._lock:
+            old_queue = self.pending_updates
+            new_queue = Queue(maxsize=max_size)
+
+            while old_queue and not old_queue.empty() and not new_queue.full():
+                try:
+                    new_queue.put_nowait(old_queue.get_nowait())
+                except Exception:
+                    break
+
+            self.pending_updates = new_queue
         
     def _load_config(self):
         """Load configuration after init phase"""
         try:
-            # Try to get client ID from persistent, then config
-            if hasattr(persistent, 'discord_rpc_client_id') and persistent.discord_rpc_client_id:
-                self.client_id = persistent.discord_rpc_client_id
-            elif hasattr(discord_config, 'application_id') and discord_config.application_id:
-                self.client_id = discord_config.application_id
+            # Prefer user-overridden persistent ID only when it is not the placeholder.
+            persistent_client_id = getattr(persistent, 'discord_rpc_client_id', None)
+            config_client_id = getattr(discord_config, 'application_id', None)
+
+            if not self._is_placeholder_client_id(persistent_client_id):
+                self.client_id = persistent_client_id
+            elif not self._is_placeholder_client_id(config_client_id):
+                self.client_id = config_client_id
+            else:
+                self.client_id = DISCORD_DEFAULT_CLIENT_ID
                 
             # Load other settings
             self.max_retries = get_discord_config('connection.max_retries', 3)
             self.retry_delay = get_discord_config('connection.retry_delay', 5.0)
             self.startup_sync_enabled = get_discord_config('connection.startup_sync_enabled', True)
+            if hasattr(persistent, 'discord_rpc_sync_startup'):
+                self.startup_sync_enabled = persistent.discord_rpc_sync_startup
             self.startup_timeout = get_discord_config('connection.startup_timeout', 5.0)
             self.connection_timeout = get_discord_config('connection.connection_timeout', 30.0)
             self.max_pending_updates = get_discord_config('queue.max_pending_updates', 10)
+            self.rate_limit_enabled = get_discord_config('rate_limiting.enabled', True)
+            self.rate_limit_interval = get_discord_config('rate_limiting.min_interval', 10.0)
+            self._resize_pending_queue(self.max_pending_updates)
         except Exception as e:
             print(f"Warning: Failed to load Discord RPC config: {e}")
         
@@ -207,7 +251,7 @@ class DiscordRPC:
                 self.last_error = str(error)
         self._notify_status_change(old_status, new_status)
         
-    def enable(self):
+    def enable(self, sync_startup=None):
         """
         Enable Discord RPC and attempt connection
         
@@ -217,10 +261,17 @@ class DiscordRPC:
         if not PYPRESENCE_AVAILABLE:
             self.status = DiscordRPCStatus.ERROR
             return False
+
+        if not self._is_valid_client_id(self.client_id):
+            self._set_status(
+                DiscordRPCStatus.ERROR,
+                "Discord RPC Client ID is not configured. Set discord_config.application_id or persistent.discord_rpc_client_id."
+            )
+            return False
             
         self.enabled = True
         persistent.discord_rpc_enabled = True
-        return self.connect()
+        return self.connect(sync_startup=sync_startup)
         
     def disable(self):
         """
@@ -233,7 +284,39 @@ class DiscordRPC:
         self.disconnect()
         self._set_status(DiscordRPCStatus.DISABLED)
 
-        
+    def _cancel_retry_timer(self):
+        """Cancel pending retry timer if one exists."""
+        with self._lock:
+            timer = self._retry_timer
+            self._retry_timer = None
+
+        if timer:
+            try:
+                timer.cancel()
+            except Exception:
+                pass
+
+    def _schedule_retry(self):
+        """Schedule reconnect through public connect path."""
+        self._cancel_retry_timer()
+
+        def retry_connect():
+            with self._lock:
+                self._retry_timer = None
+                should_retry = self.enabled and not self._shutdown_flag
+
+            if should_retry:
+                self.connect(sync_startup=False)
+
+        self._set_status(DiscordRPCStatus.RECONNECTING)
+        timer = threading.Timer(self.retry_delay, retry_connect)
+        timer.daemon = True
+
+        with self._lock:
+            if self.enabled and not self._shutdown_flag:
+                self._retry_timer = timer
+                timer.start()
+
     def connect(self, sync_startup=None):
         """
         Connect to Discord RPC
@@ -243,6 +326,13 @@ class DiscordRPC:
         Returns True if connection successful or in progress
         """
         if not self.enabled or not PYPRESENCE_AVAILABLE:
+            return False
+
+        if not self._is_valid_client_id(self.client_id):
+            self._set_status(
+                DiscordRPCStatus.ERROR,
+                "Discord RPC Client ID is not configured. Set discord_config.application_id or persistent.discord_rpc_client_id."
+            )
             return False
 
         with self._lock:
@@ -255,6 +345,8 @@ class DiscordRPC:
             return True
 
         try:
+            self._cancel_retry_timer()
+
             with self._lock:
                 if self.connection_thread and self.connection_thread.is_alive():
                     return True
@@ -280,69 +372,25 @@ class DiscordRPC:
     def _connect_sync_with_timeout(self):
         """
         Try synchronous connection with timeout for startup
-        Falls back to async if timeout exceeded
+        Uses a single worker thread to avoid duplicate live connections
         """
-        connection_result = {'success': False, 'error': None}
+        sync_thread = threading.Thread(target=self._connect_thread, daemon=True)
+        with self._lock:
+            self.connection_thread = sync_thread
 
-        def sync_connect():
-            if self._shutdown_flag:
-                return
-                
-            try:
-                # Close existing connection safely without event loop conflicts
-                self._safe_close_rpc()
-
-                self.rpc = Presence(self.client_id)
-                self.rpc.connect()
-                
-                with self._lock:
-                    self.connected = True
-                    self.retry_count = 0
-                
-                self._set_status(DiscordRPCStatus.CONNECTED)
-                connection_result['success'] = True
-
-                # Set initial presence using config template
-                initial_presence = get_presence_template('main_menu_presence')
-                if initial_presence:
-                    self._update_presence_internal(initial_presence)
-
-                # Process any pending updates
-                self._process_pending_updates()
-
-            except Exception as e:
-                connection_result['error'] = e
-                print(f"Discord RPC sync connection error: {e}")
-
-        # Start sync connection in thread
-        sync_thread = threading.Thread(target=sync_connect, daemon=True)
         sync_thread.start()
 
         # Wait with timeout
         sync_thread.join(timeout=self.startup_timeout)
 
         if sync_thread.is_alive():
-            # Timeout exceeded, fall back to async
-            print(f"Discord RPC startup sync timeout ({self.startup_timeout}s), falling back to async")
-            with self._lock:
-                self.connection_thread = threading.Thread(target=self._connect_thread, daemon=True)
-                self.connection_thread.start()
-            return True
-        elif connection_result['success']:
-            # Successful sync connection
-            return True
-        else:
-            # Failed sync connection, try async
-            if connection_result['error']:
-                print(f"Discord RPC sync connection failed: {connection_result['error']}")
-            with self._lock:
-                self.connection_thread = threading.Thread(target=self._connect_thread, daemon=True)
-                self.connection_thread.start()
-            return True
+            print(f"Discord RPC startup sync timeout ({self.startup_timeout}s), continuing in background")
+
+        return True
         
     def _connect_thread(self):
         """Internal connection thread"""
-        if self._shutdown_flag:
+        if self._shutdown_flag or not self.enabled:
             return
             
         try:
@@ -359,12 +407,15 @@ class DiscordRPC:
             self._set_status(DiscordRPCStatus.CONNECTED)
             
             # Set initial presence
-            self._update_presence_internal({
-                'state': 'В главном меню',
-                'details': config.name or 'RenPy Game',
-                'large_image': 'game_icon',
-                'large_text': config.name or 'RenPy Game'
-            })
+            initial_presence = get_presence_template('main_menu_presence') if get_presence_template else None
+            if not initial_presence:
+                initial_presence = {
+                    'state': 'В главном меню',
+                    'details': config.name or 'RenPy Game',
+                    'large_image': 'game_icon',
+                    'large_text': config.name or 'RenPy Game'
+                }
+            self._update_presence_internal(initial_presence, force=True)
             
             # Process pending updates
             self._process_pending_updates()
@@ -378,16 +429,15 @@ class DiscordRPC:
             self._set_status(DiscordRPCStatus.ERROR, e)
             print(f"Discord RPC connection error (attempt {current_retry}): {e}")
 
-            if current_retry < self.max_retries and not self._shutdown_flag:
-                # Schedule retry
-                self._set_status(DiscordRPCStatus.RECONNECTING)
-                threading.Timer(self.retry_delay, self._connect_thread).start()
+            if current_retry < self.max_retries and self.enabled and not self._shutdown_flag:
+                self._schedule_retry()
             else:
                 print(f"Discord RPC connection failed after {self.max_retries} attempts")
                 
     def disconnect(self):
         """Disconnect from Discord RPC and clear presence"""
         self._shutdown_flag = True
+        self._cancel_retry_timer()
         
         with self._lock:
             self.connected = False
@@ -406,6 +456,43 @@ class DiscordRPC:
 
         self._set_status(DiscordRPCStatus.DISCONNECTED)
         self._shutdown_flag = False
+
+    def _prepare_presence_payload(self, kwargs):
+        """Resolve configured assets and trim unsupported payload values."""
+        payload = kwargs.copy()
+
+        try:
+            if payload.get('large_image') and resolve_image_asset:
+                payload['large_image'] = resolve_image_asset(payload['large_image'], "large")
+            if payload.get('small_image') and resolve_image_asset:
+                payload['small_image'] = resolve_image_asset(payload['small_image'], "small")
+        except Exception as e:
+            print(f"Warning: Failed to resolve Discord RPC assets: {e}")
+
+        for text_key in ['state', 'details', 'large_text', 'small_text']:
+            if text_key in payload and payload[text_key] is not None:
+                payload[text_key] = str(payload[text_key])[:128]
+
+        if 'buttons' in payload and payload['buttons']:
+            payload['buttons'] = payload['buttons'][:2]
+
+        return payload
+
+    def _is_rate_limited(self):
+        """Return True if update should be throttled."""
+        if not self.rate_limit_enabled:
+            return False
+
+        now = time.time()
+        with self._lock:
+            elapsed = now - self._last_presence_update_time
+
+        return elapsed < self.rate_limit_interval
+
+    def _record_presence_update(self):
+        """Record successful update time."""
+        with self._lock:
+            self._last_presence_update_time = time.time()
     
     def _safe_close_rpc(self):
         """
@@ -440,13 +527,13 @@ class DiscordRPC:
         while not self.pending_updates.empty():
             try:
                 update_data = self.pending_updates.get_nowait()
-                self._update_presence_internal(update_data)
+                self._update_presence_internal(update_data, force=True)
             except Exception as e:
                 print(f"Error processing pending update: {e}")
                 break
 
 
-    def update_presence(self, **kwargs):
+    def update_presence(self, force=False, **kwargs):
         """
         Update Discord Rich Presence
         
@@ -484,18 +571,23 @@ class DiscordRPC:
             current_status = self.status
 
         if not is_connected:
-            # If not connected yet, queue the update
-            if current_status == DiscordRPCStatus.CONNECTING:
+            # If not connected yet, queue latest update for connect/reconnect.
+            if current_status in [DiscordRPCStatus.CONNECTING, DiscordRPCStatus.RECONNECTING, DiscordRPCStatus.ERROR, DiscordRPCStatus.TIMEOUT]:
                 try:
+                    while self.pending_updates.full():
+                        try:
+                            self.pending_updates.get_nowait()
+                        except Exception:
+                            break
                     self.pending_updates.put_nowait(kwargs.copy())
                     return True
                 except Exception as e:
                     print(f"Warning: Failed to queue update: {e}")
             return False
 
-        return self._update_presence_internal(kwargs)
+        return self._update_presence_internal(kwargs, force=force)
         
-    def _update_presence_internal(self, kwargs):
+    def _update_presence_internal(self, kwargs, force=False):
         """
         Internal presence update method
         
@@ -507,6 +599,9 @@ class DiscordRPC:
         """
         if kwargs is None:
             return False
+
+        if not force and self._is_rate_limited():
+            return True
             
         try:
             with self._lock:
@@ -514,7 +609,9 @@ class DiscordRPC:
                 is_connected = self.connected
                 
             if rpc and is_connected:
-                rpc.update(**kwargs)
+                payload = self._prepare_presence_payload(kwargs)
+                rpc.update(**payload)
+                self._record_presence_update()
                 return True
             return False
         except Exception as e:
@@ -567,8 +664,7 @@ def init_discord_rpc():
         
         if discord_rpc.is_enabled():
             # Use sync startup for better user experience
-            discord_rpc.enabled = True
-            discord_rpc.connect(sync_startup=True)
+            discord_rpc.enable(sync_startup=True)
 
         # Initialize reliable wrapper if available
         if 'init_reliable_discord_rpc' in globals():
@@ -585,7 +681,7 @@ init python:
 
 def discord_rpc_on_label_start(label_name):
     """Called when a label starts"""
-    if discord_rpc.enabled and discord_rpc.connected:
+    if discord_rpc.enabled:
         discord_rpc.update_presence(
             state=f"В сцене: {label_name}",
             details=config.name or 'RenPy Game'
@@ -593,7 +689,7 @@ def discord_rpc_on_label_start(label_name):
 
 def discord_rpc_on_menu():
     """Called when entering menu"""
-    if discord_rpc.enabled and discord_rpc.connected:
+    if discord_rpc.enabled:
         discord_rpc.update_presence(
             state="В меню",
             details=config.name or 'RenPy Game'

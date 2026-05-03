@@ -19,14 +19,21 @@ class DiscordRPCAPI:
     High-level API for Discord RPC integration in RenPy games
     Provides simple functions for common use cases
     """
+
+    @staticmethod
+    def _is_enabled():
+        """Return True when RPC object exists and user enabled it."""
+        return bool(discord_rpc and discord_rpc.enabled)
     
     @staticmethod
     def set_main_menu():
         """Set Discord status to main menu"""
-        if discord_rpc.enabled and discord_rpc.connected:
-            presence = get_presence_template('main_menu_presence')
-            if presence:
-                discord_rpc.update_presence(**presence)
+        if not DiscordRPCAPI._is_enabled():
+            return
+
+        presence = get_presence_template('main_menu_presence')
+        if presence:
+            discord_rpc.update_presence(force=True, **presence)
     
     @staticmethod
     def set_in_game(chapter_name=None, character_name=None):
@@ -37,7 +44,7 @@ class DiscordRPCAPI:
             chapter_name (str): Current chapter/scene name
             character_name (str): Current character being talked to
         """
-        if not (discord_rpc.enabled and discord_rpc.connected):
+        if not DiscordRPCAPI._is_enabled():
             return
             
         state_text = "Играет"
@@ -50,6 +57,7 @@ class DiscordRPCAPI:
             details_text = f"Разговор с {character_name}"
         
         discord_rpc.update_presence(
+            force=True,
             state=state_text,
             details=details_text,
             large_image="game_icon",
@@ -65,7 +73,7 @@ class DiscordRPCAPI:
             character_name (str): Character currently speaking
             scene_name (str): Current scene name
         """
-        if not (discord_rpc.enabled and discord_rpc.connected):
+        if not DiscordRPCAPI._is_enabled():
             return
             
         if character_name and scene_name:
@@ -82,6 +90,7 @@ class DiscordRPCAPI:
             details_text = config.name or 'RenPy Game'
         
         discord_rpc.update_presence(
+            force=True,
             state=state_text,
             details=details_text,
             large_image="game_icon",
@@ -96,32 +105,40 @@ class DiscordRPCAPI:
         Args:
             menu_name (str): Name of the current menu
         """
-        if discord_rpc.enabled and discord_rpc.connected:
-            discord_rpc.update_presence(
-                state=f"В меню: {menu_name}",
-                details=config.name or 'RenPy Game',
-                large_image="game_icon",
-                large_text=config.name or 'RenPy Game'
-            )
+        if not DiscordRPCAPI._is_enabled():
+            return
+
+        discord_rpc.update_presence(
+            force=True,
+            state=f"В меню: {menu_name}",
+            details=config.name or 'RenPy Game',
+            large_image="game_icon",
+            large_text=config.name or 'RenPy Game'
+        )
     
     @staticmethod
     def set_paused():
         """Set Discord status to paused"""
-        if discord_rpc.enabled and discord_rpc.connected:
-            presence = get_presence_template('paused_presence')
-            if presence:
-                discord_rpc.update_presence(**presence)
+        if not DiscordRPCAPI._is_enabled():
+            return
+
+        presence = get_presence_template('paused_presence')
+        if presence:
+            discord_rpc.update_presence(force=True, **presence)
     
     @staticmethod
     def set_loading():
         """Set Discord status to loading"""
-        if discord_rpc.enabled and discord_rpc.connected:
-            discord_rpc.update_presence(
-                state="Загрузка...",
-                details=config.name or 'RenPy Game',
-                large_image="game_icon",
-                large_text=config.name or 'RenPy Game'
-            )
+        if not DiscordRPCAPI._is_enabled():
+            return
+
+        discord_rpc.update_presence(
+            force=True,
+            state="Загрузка...",
+            details=config.name or 'RenPy Game',
+            large_image="game_icon",
+            large_text=config.name or 'RenPy Game'
+        )
     
     @staticmethod
     def set_custom(state_text, details_text=None, **kwargs):
@@ -133,7 +150,7 @@ class DiscordRPCAPI:
             details_text (str): Custom details text
             **kwargs: Additional Discord RPC parameters
         """
-        if not (discord_rpc.enabled and discord_rpc.connected):
+        if not DiscordRPCAPI._is_enabled():
             return
             
         update_data = {
@@ -148,7 +165,7 @@ class DiscordRPCAPI:
             if key not in ['large_image', 'large_text']:
                 update_data[key] = value
         
-        discord_rpc.update_presence(**update_data)
+        discord_rpc.update_presence(force=True, **update_data)
     
     @staticmethod
     def set_with_timestamp(state_text, details_text=None, start_time=None):
@@ -160,12 +177,13 @@ class DiscordRPCAPI:
             details_text (str): Details text
             start_time (int): Start timestamp (Unix time)
         """
-        if not (discord_rpc.enabled and discord_rpc.connected):
+        if not DiscordRPCAPI._is_enabled():
             return
             
         import time
         
         discord_rpc.update_presence(
+            force=True,
             state=state_text,
             details=details_text or (config.name or 'RenPy Game'),
             start=start_time or int(time.time()),
@@ -176,7 +194,7 @@ class DiscordRPCAPI:
     @staticmethod
     def clear():
         """Clear Discord Rich Presence"""
-        if discord_rpc.enabled and discord_rpc.connected:
+        if DiscordRPCAPI._is_enabled():
             discord_rpc.clear_presence()
 
 

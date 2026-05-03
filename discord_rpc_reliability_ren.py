@@ -11,6 +11,7 @@ discord_rpc: Any = None
 reliable_discord_rpc: Any = None
 config: Any = None
 DiscordRPCStatus: Any = None
+get_discord_config: Any = None
 DISCORD_QUEUE_MAX_SIZE: int = 100
 DISCORD_THREAD_JOIN_TIMEOUT: float = 2.0
 DISCORD_MONITOR_INTERVAL: float = 5.0
@@ -48,6 +49,16 @@ class DiscordRPCReliabilityManager:
         self.max_queue_size = DISCORD_QUEUE_MAX_SIZE
         self._lock = threading.RLock()
         self._shutdown_flag = False
+
+        try:
+            if get_discord_config:
+                self.connection_timeout = get_discord_config('connection.connection_timeout', 30.0)
+                self.update_timeout = get_discord_config('connection.update_timeout', 10.0)
+                self.health_check_interval = get_discord_config('connection.health_check_interval', 60.0)
+                self.max_queue_size = get_discord_config('queue.max_reliability_queue', DISCORD_QUEUE_MAX_SIZE)
+                self.update_queue = Queue(maxsize=self.max_queue_size)
+        except Exception as e:
+            print(f"Warning: Failed to load Discord RPC reliability config: {e}")
         
     def start_monitoring(self):
         """Start connection monitoring"""
@@ -135,7 +146,7 @@ class DiscordRPCReliabilityManager:
                 if last_update:
                     def restore_state():
                         if not self._shutdown_flag:
-                            self.discord_rpc._update_presence_internal(last_update)
+                            self.discord_rpc._update_presence_internal(last_update, force=True)
                     threading.Timer(2.0, restore_state).start()
                     
         except Exception as e:
@@ -143,8 +154,8 @@ class DiscordRPCReliabilityManager:
             
             with self.discord_rpc._lock:
                 self.discord_rpc.connected = False
-                
-            self.discord_rpc._set_status(DiscordRPCStatus.ERROR, e)
+
+            self.discord_rpc._set_status(DiscordRPCStatus.RECONNECTING, e)
             self._attempt_recovery()
 
             
@@ -178,6 +189,11 @@ class DiscordRPCReliabilityManager:
     def queue_update(self, update_data):
         """Queue an update for reliable delivery"""
         try:
+            while self.update_queue.full():
+                try:
+                    self.update_queue.get_nowait()
+                except Exception:
+                    break
             self.update_queue.put_nowait(update_data.copy())
         except Exception as e:
             print(f"Discord RPC update queue full, dropping update: {e}")
@@ -216,7 +232,7 @@ class DiscordRPCReliabilityManager:
         # Attempt reconnection
         if retry_count < max_retries and not self._shutdown_flag:
             def reconnect():
-                if not self._shutdown_flag:
+                if not self._shutdown_flag and self.discord_rpc.enabled:
                     self.discord_rpc.connect()
             threading.Timer(self.discord_rpc.retry_delay, reconnect).start()
         else:
@@ -283,12 +299,15 @@ class ReliableDiscordRPC:
                 is_enabled = self.discord_rpc.enabled
                 is_connected = self.discord_rpc.connected
             
-            if is_enabled and is_connected:
+            if not is_enabled:
+                return False
+
+            if is_connected:
                 return self.discord_rpc.update_presence(**kwargs)
-            else:
-                # Queue for later delivery
-                self.reliability_manager.queue_update(kwargs)
-                return True
+
+            # Queue for later delivery
+            self.reliability_manager.queue_update(kwargs)
+            return True
         except Exception as e:
             error_msg = self.error_handler.handle_update_error(e)
             print(f"Discord RPC safe update failed: {error_msg}")

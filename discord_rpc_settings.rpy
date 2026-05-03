@@ -57,8 +57,8 @@ screen discord_rpc_settings():
                             
                             hbox:
                                 spacing 10
-                                textbutton "Подключить" action Function(discord_rpc.enable) sensitive not discord_rpc.connected
-                                textbutton "Отключить" action Function(discord_rpc.disable) sensitive discord_rpc.connected
+                                textbutton "Подключить" action Function(set_discord_rpc_connected, True) sensitive not discord_rpc.connected
+                                textbutton "Отключить" action Function(set_discord_rpc_connected, False) sensitive discord_rpc.connected
                                 textbutton "Переподключить" action Function(discord_rpc_reconnect)
                             
                             text "Client ID приложения Discord:" size 14
@@ -94,11 +94,36 @@ screen discord_rpc_settings():
 
 # Functions for settings management
 init python:
+    def set_discord_rpc_connected(connected):
+        """Connect/disconnect Discord RPC from screen actions without changing preference."""
+        if connected:
+            if not discord_rpc.enabled:
+                discord_rpc.enabled = True
+            discord_rpc.connect()
+            renpy.notify("Discord RPC подключен")
+        else:
+            discord_rpc.disconnect()
+            renpy.notify("Discord RPC отключен")
+        return None
+
+    def get_effective_discord_client_id():
+        """Return persistent override only when user entered a real ID."""
+        persistent_id = getattr(persistent, 'discord_rpc_client_id', None)
+        config_id = getattr(discord_config, 'application_id', None)
+
+        if persistent_id and persistent_id != DISCORD_DEFAULT_CLIENT_ID:
+            return persistent_id
+        if config_id and config_id != DISCORD_DEFAULT_CLIENT_ID:
+            return config_id
+        return persistent_id or config_id or DISCORD_DEFAULT_CLIENT_ID
+
     def apply_discord_rpc_settings():
         """Apply Discord RPC settings"""
+        effective_client_id = get_effective_discord_client_id()
+
         # Update client ID if changed
-        if discord_rpc.client_id != persistent.discord_rpc_client_id:
-            discord_rpc.client_id = persistent.discord_rpc_client_id
+        if discord_rpc.client_id != effective_client_id:
+            discord_rpc.client_id = effective_client_id
             # Reconnect if currently connected
             if discord_rpc.connected:
                 discord_rpc.disconnect()
@@ -133,14 +158,10 @@ init python:
 init python:
     def toggle_discord_rpc():
         """Quick toggle Discord RPC on/off"""
-        if persistent.discord_rpc_enabled:
-            persistent.discord_rpc_enabled = False
-            discord_rpc.disable()
-            renpy.notify("Discord RPC отключен")
+        if discord_rpc.connected:
+            set_discord_rpc_connected(False)
         else:
-            persistent.discord_rpc_enabled = True
-            discord_rpc.enable()
-            renpy.notify("Discord RPC включен")
+            set_discord_rpc_connected(True)
     
     def update_discord_rpc_game_state(state_text, details_text=None):
         """
@@ -150,12 +171,12 @@ init python:
             state_text (str): Current state text
             details_text (str): Optional details text
         """
-        if discord_rpc.enabled and discord_rpc.connected:
+        if discord_rpc.enabled:
             update_data = {
                 'state': state_text,
                 'details': details_text or (config.name or 'RenPy Game')
             }
-            discord_rpc.update_presence(**update_data)
+            discord_rpc.update_presence(force=True, **update_data)
 
 # Automatic status updates based on game events
 # Note: Automatic label tracking is disabled by default to avoid conflicts
