@@ -77,6 +77,23 @@ $ discord_set_dialogue("Alice", "Park")
 $ discord_set_in_game("Chapter 1", "Alice")
 ```
 
+## ⚙️ Preferences Integration
+
+Add live connect/disconnect controls to your `screen preferences()`:
+
+```renpy
+hbox:
+    text _("Discord RPC:")
+    textbutton _("On"):
+        action Function(set_discord_rpc_connected, True)
+        selected discord_rpc.connected
+    textbutton _("Off"):
+        action Function(set_discord_rpc_connected, False)
+        selected not discord_rpc.connected
+```
+
+`set_discord_rpc_connected()` is provided by `discord_rpc_api_ren.py` and returns `None`, so it is safe for menu buttons. See [Settings Menu](https://github.com/ElysiumTeamDevelopment/ElysiumDiscordRPC/wiki/Settings-Menu) for full examples.
+
 ## 📁 Module Structure
 
 | File | Purpose | Required |

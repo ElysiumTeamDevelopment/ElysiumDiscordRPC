@@ -9,6 +9,7 @@ discord_rpc: Any = None
 drpc: Any = None
 config: Any = None
 get_presence_template: Callable = None
+renpy: Any = None
 
 """renpy
 init python:
@@ -296,6 +297,47 @@ def discord_clear():
         $ discord_clear()
     """
     drpc.clear()
+
+def set_discord_rpc_connected(connected, notify=True):
+    """
+    Connect or disconnect live Discord RPC without changing persistent preference.
+
+    Use this in screens instead of Function(discord_rpc.enable), because this
+    helper returns None and keeps menu flow stable.
+    """
+    if connected:
+        if not discord_rpc.enabled:
+            discord_rpc.enabled = True
+        discord_rpc.connect()
+        if notify:
+            renpy.notify("Discord RPC подключен")
+    else:
+        discord_rpc.disconnect()
+        if notify:
+            renpy.notify("Discord RPC отключен")
+
+    return None
+
+def toggle_discord_rpc():
+    """
+    Toggle live Discord RPC connection.
+    Does not change persistent.discord_rpc_enabled.
+    """
+    set_discord_rpc_connected(not discord_rpc.connected)
+    return None
+
+def update_discord_rpc_game_state(state_text, details_text=None):
+    """
+    Quick function to update Discord RPC from game script.
+    """
+    if discord_rpc.enabled:
+        update_data = {
+            'state': state_text,
+            'details': details_text or (config.name or 'RenPy Game')
+        }
+        discord_rpc.update_presence(force=True, **update_data)
+
+    return None
 
 """renpy
 init python:

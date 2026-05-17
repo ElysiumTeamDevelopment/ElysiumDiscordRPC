@@ -94,18 +94,6 @@ screen discord_rpc_settings():
 
 # Functions for settings management
 init python:
-    def set_discord_rpc_connected(connected):
-        """Connect/disconnect Discord RPC from screen actions without changing preference."""
-        if connected:
-            if not discord_rpc.enabled:
-                discord_rpc.enabled = True
-            discord_rpc.connect()
-            renpy.notify("Discord RPC подключен")
-        else:
-            discord_rpc.disconnect()
-            renpy.notify("Discord RPC отключен")
-        return None
-
     def get_effective_discord_client_id():
         """Return persistent override only when user entered a real ID."""
         persistent_id = getattr(persistent, 'discord_rpc_client_id', None)
@@ -153,30 +141,6 @@ init python:
 
 # Note: To add Discord RPC to your preferences screen, use:
 # textbutton "Discord RPC" action ShowMenu("discord_rpc_settings")
-
-# Quick toggle functions for use in game
-init python:
-    def toggle_discord_rpc():
-        """Quick toggle Discord RPC on/off"""
-        if discord_rpc.connected:
-            set_discord_rpc_connected(False)
-        else:
-            set_discord_rpc_connected(True)
-    
-    def update_discord_rpc_game_state(state_text, details_text=None):
-        """
-        Quick function to update Discord RPC from game script
-        
-        Args:
-            state_text (str): Current state text
-            details_text (str): Optional details text
-        """
-        if discord_rpc.enabled:
-            update_data = {
-                'state': state_text,
-                'details': details_text or (config.name or 'RenPy Game')
-            }
-            discord_rpc.update_presence(force=True, **update_data)
 
 # Automatic status updates based on game events
 # Note: Automatic label tracking is disabled by default to avoid conflicts
