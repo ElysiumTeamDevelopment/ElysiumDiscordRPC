@@ -3,6 +3,7 @@
 
 # IDE hints (not executed by Ren'Py)
 from typing import Optional, Dict, Any, List, Callable
+import asyncio
 import threading
 import time
 from queue import Queue
@@ -25,6 +26,7 @@ init -1 python:
 import threading
 import time
 import traceback
+import asyncio
 from queue import Queue
 
 try:
@@ -111,6 +113,20 @@ class DiscordRPC:
         self.status_callbacks = []  # List of callbacks (RenPy compatible)
         self.pending_updates = Queue(maxsize=DISCORD_QUEUE_MAX_SIZE)  # Thread-safe queue
         self._shutdown_flag = False
+
+    def _create_rpc_loop(self):
+        """Create and bind an event loop for the current RPC worker thread."""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop
+
+    def _bind_rpc_loop(self, rpc):
+        """Bind an RPC object's loop to the current thread before using it."""
+        loop = getattr(rpc, 'loop', None)
+        if loop and not loop.is_closed():
+            asyncio.set_event_loop(loop)
+            return True
+        return False
 
     def _is_placeholder_client_id(self, client_id):
         """Return True for empty/default placeholder client IDs."""
@@ -397,7 +413,8 @@ class DiscordRPC:
             # Close existing connection safely without event loop conflicts
             self._safe_close_rpc()
                     
-            self.rpc = Presence(self.client_id)
+            loop = self._create_rpc_loop()
+            self.rpc = Presence(self.client_id, loop=loop)
             self.rpc.connect()
             
             with self._lock:
@@ -501,21 +518,31 @@ class DiscordRPC:
         """
         if not self.rpc:
             return
+
+        rpc = self.rpc
+        loop = getattr(rpc, 'loop', None)
             
         try:
+            self._bind_rpc_loop(rpc)
+
             # Try to clear presence first (may fail if event loop issues)
             try:
-                self.rpc.clear()
+                rpc.clear()
             except:
                 pass  # Ignore clear errors, focus on closing
             
             # Close the connection
             try:
-                self.rpc.close()
+                rpc.close()
             except:
                 pass  # Ignore close errors
                 
         finally:
+            if loop and not loop.is_closed():
+                try:
+                    loop.close()
+                except:
+                    pass
             # Always set rpc to None to prevent reuse
             self.rpc = None
         
@@ -610,6 +637,7 @@ class DiscordRPC:
                 
             if rpc and is_connected:
                 payload = self._prepare_presence_payload(kwargs)
+                self._bind_rpc_loop(rpc)
                 rpc.update(**payload)
                 self._record_presence_update()
                 return True
@@ -638,6 +666,7 @@ class DiscordRPC:
                 
             if rpc and is_connected:
                 try:
+                    self._bind_rpc_loop(rpc)
                     rpc.clear()
                     return True
                 except:

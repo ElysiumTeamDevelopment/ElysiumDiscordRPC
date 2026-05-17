@@ -134,6 +134,7 @@ class DiscordRPCReliabilityManager:
             
             if rpc and is_connected:
                 # Try a minimal update
+                self.discord_rpc._bind_rpc_loop(rpc)
                 rpc.update(
                     state="Проверка соединения",
                     details=config.name or 'RenPy Game'
@@ -211,13 +212,7 @@ class DiscordRPCReliabilityManager:
             self.discord_rpc.connected = False
         
         # Close existing connection
-        if self.discord_rpc.rpc:
-            try:
-                self.discord_rpc.rpc.close()
-            except Exception as e:
-                print(f"Warning: Error closing RPC during recovery: {e}")
-            finally:
-                self.discord_rpc.rpc = None
+        self.discord_rpc._safe_close_rpc()
             
         # Reset retry count if it's been a while
         current_time = time.time()
