@@ -1,366 +1,150 @@
 # Discord RPC Reliability and Error Handling Module
-# Provides robust error handling, reconnection logic, and failure recovery
+# Provides error handling, user-friendly diagnostics, and backwards-compatible proxies
 
 # IDE hints (not executed by Ren'Py)
 from typing import Optional, Any, Dict
-import threading
-import time
-from queue import Queue, Empty
 
 discord_rpc: Any = None
 reliable_discord_rpc: Any = None
 config: Any = None
 DiscordRPCStatus: Any = None
 get_discord_config: Any = None
-DISCORD_QUEUE_MAX_SIZE: int = 100
-DISCORD_THREAD_JOIN_TIMEOUT: float = 2.0
-DISCORD_MONITOR_INTERVAL: float = 5.0
 
 """renpy
 init python:
 """
 
-import threading
-import time
-from queue import Queue, Empty
-
-
-class DiscordRPCReliabilityManager:
-    """
-    Manages reliability features for Discord RPC
-    Handles reconnection, error recovery, and connection monitoring
-    """
-    
-    def __init__(self, discord_rpc_instance):
-        """
-        Initialize reliability manager
-        
-        Args:
-            discord_rpc_instance: The main DiscordRPC instance
-        """
-        self.discord_rpc = discord_rpc_instance
-        self.monitor_thread = None
-        self.monitoring = False
-        self.update_queue = Queue(maxsize=DISCORD_QUEUE_MAX_SIZE)
-        self.last_successful_update = None
-        self.connection_timeout = 30.0
-        self.update_timeout = 10.0
-        self.health_check_interval = 60.0
-        self.max_queue_size = DISCORD_QUEUE_MAX_SIZE
-        self._lock = threading.RLock()
-        self._shutdown_flag = False
-
-        try:
-            if get_discord_config:
-                self.connection_timeout = get_discord_config('connection.connection_timeout', 30.0)
-                self.update_timeout = get_discord_config('connection.update_timeout', 10.0)
-                self.health_check_interval = get_discord_config('connection.health_check_interval', 60.0)
-                self.max_queue_size = get_discord_config('queue.max_reliability_queue', DISCORD_QUEUE_MAX_SIZE)
-                self.update_queue = Queue(maxsize=self.max_queue_size)
-        except Exception as e:
-            print(f"Warning: Failed to load Discord RPC reliability config: {e}")
-        
-    def start_monitoring(self):
-        """Start connection monitoring"""
-        with self._lock:
-            if self.monitoring:
-                return
-                
-            self.monitoring = True
-            self._shutdown_flag = False
-            self.monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
-            self.monitor_thread.start()
-        
-    def stop_monitoring(self):
-        """Stop connection monitoring"""
-        with self._lock:
-            self.monitoring = False
-            self._shutdown_flag = True
-            thread = self.monitor_thread
-            
-        if thread and thread.is_alive():
-            thread.join(timeout=DISCORD_THREAD_JOIN_TIMEOUT * 2.5)
-            if thread.is_alive():
-                print("Warning: Monitor thread did not terminate cleanly")
-            
-    def _monitor_loop(self):
-        """Main monitoring loop"""
-        while not self._shutdown_flag:
-            with self._lock:
-                should_monitor = self.monitoring
-                
-            if not should_monitor:
-                break
-                
-            try:
-                self._check_connection_health()
-                self._process_update_queue()
-                time.sleep(DISCORD_MONITOR_INTERVAL)
-            except Exception as e:
-                print(f"Discord RPC monitor error: {e}")
-                time.sleep(DISCORD_MONITOR_INTERVAL * 2)  # Wait longer on error
-                
-    def _check_connection_health(self):
-        """Check if connection is healthy"""
-        if not self.discord_rpc.enabled:
-            return
-            
-        current_time = time.time()
-        
-        # Check for connection timeout
-        if (self.discord_rpc.connection_start_time and 
-            current_time - self.discord_rpc.connection_start_time > self.connection_timeout and
-            self.discord_rpc.status == DiscordRPCStatus.CONNECTING):
-            
-            print("Discord RPC connection timeout detected")
-            self.discord_rpc._set_status(DiscordRPCStatus.TIMEOUT)
-            self._attempt_recovery()
-            
-        # Check for stale updates
-        if (self.last_successful_update and 
-            current_time - self.last_successful_update > self.health_check_interval and
-            self.discord_rpc.connected):
-            
-            # Send a health check update
-            self._health_check_update()
-            
-    def _health_check_update(self):
-        """Send a health check update to verify connection"""
-        try:
-            with self.discord_rpc._lock:
-                rpc = self.discord_rpc.rpc
-                is_connected = self.discord_rpc.connected
-                last_update = self.discord_rpc.last_update.copy() if self.discord_rpc.last_update else None
-            
-            if rpc and is_connected:
-                # Try a minimal update
-                self.discord_rpc._bind_rpc_loop(rpc)
-                rpc.update(
-                    state="Проверка соединения",
-                    details=config.name or 'RenPy Game'
-                )
-                
-                with self._lock:
-                    self.last_successful_update = time.time()
-                
-                # Restore previous state if available
-                if last_update:
-                    def restore_state():
-                        if not self._shutdown_flag:
-                            self.discord_rpc._update_presence_internal(last_update, force=True)
-                    threading.Timer(2.0, restore_state).start()
-                    
-        except Exception as e:
-            print(f"Discord RPC health check failed: {e}")
-            
-            with self.discord_rpc._lock:
-                self.discord_rpc.connected = False
-
-            self.discord_rpc._set_status(DiscordRPCStatus.RECONNECTING, e)
-            self._attempt_recovery()
-
-            
-    def _process_update_queue(self):
-        """Process queued updates"""
-        while not self.update_queue.empty():
-            try:
-                update_data = self.update_queue.get_nowait()
-                
-                with self.discord_rpc._lock:
-                    is_connected = self.discord_rpc.connected
-                
-                if is_connected:
-                    success = self.discord_rpc._update_presence_internal(update_data)
-                    if success:
-                        with self._lock:
-                            self.last_successful_update = time.time()
-                else:
-                    # Re-queue if not connected
-                    if self.update_queue.qsize() < self.max_queue_size:
-                        try:
-                            self.update_queue.put_nowait(update_data)
-                        except Exception:
-                            pass  # Queue full, drop update
-                    break
-            except Empty:
-                break
-            except Exception as e:
-                print(f"Error processing update queue: {e}")
-                
-    def queue_update(self, update_data):
-        """Queue an update for reliable delivery"""
-        try:
-            while self.update_queue.full():
-                try:
-                    self.update_queue.get_nowait()
-                except Exception:
-                    break
-            self.update_queue.put_nowait(update_data.copy())
-        except Exception as e:
-            print(f"Discord RPC update queue full, dropping update: {e}")
-            
-    def _attempt_recovery(self):
-        """Attempt to recover from connection issues"""
-        with self.discord_rpc._lock:
-            if not self.discord_rpc.enabled or self._shutdown_flag:
-                return
-                
-        print("Attempting Discord RPC recovery...")
-        
-        # Reset connection state
-        with self.discord_rpc._lock:
-            self.discord_rpc.connected = False
-        
-        # Close existing connection
-        self.discord_rpc._safe_close_rpc()
-            
-        # Reset retry count if it's been a while
-        current_time = time.time()
-        with self.discord_rpc._lock:
-            if (self.discord_rpc.connection_start_time and 
-                current_time - self.discord_rpc.connection_start_time > 300):  # 5 minutes
-                self.discord_rpc.retry_count = 0
-            
-            retry_count = self.discord_rpc.retry_count
-            max_retries = self.discord_rpc.max_retries
-            
-        # Attempt reconnection
-        if retry_count < max_retries and not self._shutdown_flag:
-            def reconnect():
-                if not self._shutdown_flag and self.discord_rpc.enabled:
-                    self.discord_rpc.connect()
-            threading.Timer(self.discord_rpc.retry_delay, reconnect).start()
-        else:
-            print("Discord RPC max retries exceeded, giving up")
-            self.discord_rpc._set_status(DiscordRPCStatus.ERROR)
-
+from typing import Optional, Any, Dict
 
 class DiscordRPCErrorHandler:
-    """Handles specific Discord RPC errors and provides appropriate responses"""
-    
+    """Translates raw Discord IPC / socket exceptions into user-friendly messages."""
+
     @staticmethod
-    def handle_connection_error(error):
-        """Handle connection-related errors"""
+    def handle_connection_error(error: Any) -> str:
+        """Handle connection-related errors."""
         error_str = str(error).lower()
-        
-        if "discord not found" in error_str or "no discord client" in error_str:
+
+        if "discord not found" in error_str or "no discord client" in error_str or "could not find discord" in error_str:
             return "Discord не запущен. Запустите Discord и попробуйте снова."
         elif "invalid client id" in error_str:
             return "Неверный Client ID. Проверьте настройки Discord RPC."
-        elif "connection refused" in error_str:
+        elif "connection refused" in error_str or "connection reset" in error_str:
             return "Discord отклонил соединение. Проверьте настройки Discord."
         elif "timeout" in error_str:
             return "Таймаут подключения к Discord."
         else:
             return f"Ошибка подключения: {error}"
-            
+
     @staticmethod
-    def handle_update_error(error):
-        """Handle update-related errors"""
+    def handle_update_error(error: Any) -> str:
+        """Handle update-related errors."""
         error_str = str(error).lower()
-        
+
         if "invalid payload" in error_str:
             return "Неверные данные для обновления статуса."
         elif "rate limit" in error_str:
-            return "Слишком частые обновления. Подождите немного."
-        elif "connection lost" in error_str:
+            return "Слишком частые обновления. Троттлинг активен."
+        elif "connection lost" in error_str or "pipe closed" in error_str:
             return "Соединение с Discord потеряно."
         else:
             return f"Ошибка обновления: {error}"
 
 
+class DiscordRPCReliabilityManager:
+    """
+    Lightweight compatibility manager for Discord RPC reliability.
+    Core socket resilience and coalesced queueing are handled directly by DiscordRPC worker.
+    """
+
+    def __init__(self, discord_rpc_instance: Any):
+        self.discord_rpc = discord_rpc_instance
+        self.monitoring: bool = False
+
+    def start_monitoring(self) -> None:
+        """Compatibility method for starting monitoring."""
+        self.monitoring = True
+
+    def stop_monitoring(self) -> None:
+        """Compatibility method for stopping monitoring."""
+        self.monitoring = False
+
+    def queue_update(self, update_data: Dict[str, Any]) -> None:
+        """Queue an update through the main RPC client."""
+        if self.discord_rpc:
+            self.discord_rpc.update_presence(force=False, **update_data)
+
+
 class ReliableDiscordRPC:
-    """Wrapper that adds reliability features to the main Discord RPC"""
-    
-    def __init__(self, discord_rpc_instance):
+    """Backwards-compatible wrapper adding error translation around DiscordRPC."""
+
+    def __init__(self, discord_rpc_instance: Any):
         self.discord_rpc = discord_rpc_instance
         self.reliability_manager = DiscordRPCReliabilityManager(discord_rpc_instance)
         self.error_handler = DiscordRPCErrorHandler()
-        
-        # Add status callback for monitoring
-        self.discord_rpc.add_status_callback(self._on_status_change)
-        
-    def _on_status_change(self, old_status, new_status):
-        """Handle status changes"""
-        if new_status == DiscordRPCStatus.CONNECTED:
-            self.reliability_manager.start_monitoring()
-        elif new_status in [DiscordRPCStatus.DISABLED, DiscordRPCStatus.ERROR]:
-            self.reliability_manager.stop_monitoring()
-            
-    def safe_update(self, **kwargs):
-        """Safely update Discord RPC with error handling"""
+
+    def safe_update(self, **kwargs) -> bool:
+        """Safely update Discord RPC presence with error handling."""
+        if not self.discord_rpc or not self.discord_rpc.enabled:
+            return False
         try:
-            with self.discord_rpc._lock:
-                is_enabled = self.discord_rpc.enabled
-                is_connected = self.discord_rpc.connected
-            
-            if not is_enabled:
-                return False
-
-            if is_connected:
-                return self.discord_rpc.update_presence(**kwargs)
-
-            # Queue for later delivery
-            self.reliability_manager.queue_update(kwargs)
-            return True
+            return self.discord_rpc.update_presence(force=False, **kwargs)
         except Exception as e:
             error_msg = self.error_handler.handle_update_error(e)
             print(f"Discord RPC safe update failed: {error_msg}")
             return False
-            
-    def safe_connect(self):
-        """Safely connect with enhanced error handling"""
+
+    def safe_connect(self) -> bool:
+        """Safely initiate connection with error handling."""
+        if not self.discord_rpc:
+            return False
         try:
-            return self.discord_rpc.connect()
+            return self.discord_rpc.connect(sync_startup=False)
         except Exception as e:
             error_msg = self.error_handler.handle_connection_error(e)
             print(f"Discord RPC safe connect failed: {error_msg}")
             self.discord_rpc._set_status(DiscordRPCStatus.ERROR, error_msg)
             return False
-            
-    def cleanup(self):
-        """Cleanup reliability features"""
+
+    def cleanup(self) -> None:
+        """Cleanup reliability wrapper."""
         self.reliability_manager.stop_monitoring()
 
 
-# Create reliable wrapper for global discord_rpc instance
 reliable_discord_rpc = None
 
-
 def init_reliable_discord_rpc():
-    """Initialize reliable Discord RPC wrapper"""
+    """Initialize reliable Discord RPC wrapper."""
     global reliable_discord_rpc
     try:
         if 'discord_rpc' in globals() and discord_rpc and not reliable_discord_rpc:
             reliable_discord_rpc = ReliableDiscordRPC(discord_rpc)
     except NameError:
-        # discord_rpc not yet initialized, will be called later
         pass
 
-# Initialize after discord_rpc is created
 init_reliable_discord_rpc()
-
 
 """renpy
 init python:
 """
 
-# Enhanced API functions with reliability
-
 def discord_safe_update(**kwargs):
-    """Safely update Discord RPC status"""
+    """Safely update Discord RPC status."""
     if reliable_discord_rpc:
         return reliable_discord_rpc.safe_update(**kwargs)
+    elif discord_rpc:
+        return discord_rpc.update_presence(force=False, **kwargs)
     return False
-    
+
 def discord_safe_connect():
-    """Safely connect to Discord RPC"""
+    """Safely connect to Discord RPC."""
     if reliable_discord_rpc:
         return reliable_discord_rpc.safe_connect()
+    elif discord_rpc:
+        return discord_rpc.connect(sync_startup=False)
     return False
-    
+
 def get_discord_error_info():
-    """Get last Discord RPC error information"""
+    """Get last Discord RPC error information."""
     if discord_rpc:
         return {
             'last_error': discord_rpc.last_error,
@@ -374,8 +158,9 @@ init python:
 """
 
 def cleanup_reliable_discord_rpc():
-    """Cleanup reliable Discord RPC on exit"""
+    """Cleanup hook for reliability module."""
     if reliable_discord_rpc:
         reliable_discord_rpc.cleanup()
 
-config.quit_callbacks.append(cleanup_reliable_discord_rpc)
+if hasattr(config, 'quit_callbacks') and config.quit_callbacks is not None:
+    config.quit_callbacks.append(cleanup_reliable_discord_rpc)

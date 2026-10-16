@@ -90,8 +90,8 @@ define discord_config.dialogue_presence = {
 
 # Connection settings
 define discord_config.connection = {
-    "startup_sync_enabled": True,       # Enable sync connection on startup
-    "startup_timeout": 5.0,             # Max seconds to wait for startup connection
+    "startup_sync_enabled": False,      # Run connection asynchronously in background
+    "startup_timeout": 5.0,             # Max seconds to wait if sync startup is requested
     "max_retries": 3,                   # Max reconnection attempts
     "retry_delay": 5.0,                 # Seconds between retry attempts
     "connection_timeout": 30.0,         # Max seconds for connection attempt
@@ -108,7 +108,7 @@ define discord_config.queue = {
 # Rate limiting settings
 define discord_config.rate_limiting = {
     "enabled": True,                    # Prevent excessive Discord IPC updates
-    "min_interval": 10.0,               # Minimum seconds between updates
+    "min_interval": 4.0,                # Minimum seconds between updates (Discord IPC recommended)
 }
 
 # Logging settings
